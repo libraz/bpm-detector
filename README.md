@@ -1,7 +1,7 @@
 # BPM & Key Detector
 
 [![codecov](https://codecov.io/gh/libraz/bpm-detector/branch/main/graph/badge.svg)](https://codecov.io/gh/libraz/bpm-detector)
-[![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/downloads/)
+[![Python Version](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Docker Pulls](https://img.shields.io/docker/pulls/ghcr.io/libraz/bpm-detector)](https://github.com/libraz/bpm-detector/pkgs/container/bpm-detector)
 
@@ -40,7 +40,7 @@ pip install bpm-detector
 
 ```bash
 # Clone the repository
-git clone https://github.com/libraz/bpm-detector.git
+git clone git@github.com:libraz/bpm-detector.git
 cd bpm-detector
 
 # Create a virtual environment (optional but recommended)
@@ -55,7 +55,7 @@ pip install -e .
 
 ```bash
 # Clone the repository
-git clone https://github.com/libraz/bpm-detector.git
+git clone git@github.com:libraz/bpm-detector.git
 cd bpm-detector
 
 # Install dependencies with rye
@@ -183,7 +183,7 @@ Key detection is implemented as an optional feature (`--detect-key`) for several
 ## Project Stats
 
 - **Test Coverage**: 90%+ (171 lines covered)
-- **Supported Python**: 3.8, 3.9, 3.10, 3.11, 3.12
+- **Supported Python**: 3.12
 - **Docker Image Size**: ~1.6GB
 - **Build Time**: ~4 minutes
 - **Supported Formats**: WAV, MP3, FLAC, M4A, OGG
