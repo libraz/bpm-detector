@@ -1,0 +1,6 @@
+librosa>=0.11.0
+soundfile>=0.13.1
+audioread>=3.0.1
+numpy>=2.2.6
+tqdm>=4.67.1
+colorama>=0.4.6
