@@ -1,81 +1,81 @@
 """Tests for CLI module."""
 
-import unittest
-import sys
-import io
-from unittest.mock import patch, MagicMock
 import argparse
+import io
+import sys
+import unittest
+from unittest.mock import MagicMock, patch
 
-from bpm_detector.cli import main, print_results, analyze_file
+from bpm_detector.cli import analyze_file, main, print_results
 
 
 class TestCLI(unittest.TestCase):
     """Test CLI functionality."""
-    
+
     def test_print_results_bpm_only(self):
         """Test printing results for BPM only analysis."""
         results = {
-            'filename': 'test.wav',
-            'bpm': 120.5,
-            'bpm_confidence': 85.3,
-            'bpm_candidates': [(120.5, 45), (241.0, 23), (60.25, 18)]
+            "filename": "test.wav",
+            "bpm": 120.5,
+            "bpm_confidence": 85.3,
+            "bpm_candidates": [(120.5, 45), (241.0, 23), (60.25, 18)],
         }
-        
+
         # Capture stdout
         captured_output = io.StringIO()
-        with patch('sys.stdout', captured_output):
+        with patch("sys.stdout", captured_output):
             print_results(results, detect_key=False)
-        
+
         output = captured_output.getvalue()
-        
+
         # Check that essential information is present
-        self.assertIn('test.wav', output)
-        self.assertIn('120.5', output)
-        self.assertIn('85.3%', output)
-        self.assertIn('BPM Candidates', output)
-    
+        self.assertIn("test.wav", output)
+        self.assertIn("120.5", output)
+        self.assertIn("85.3%", output)
+        self.assertIn("BPM Candidates", output)
+
     def test_print_results_with_key(self):
         """Test printing results with key detection."""
         results = {
-            'filename': 'test.wav',
-            'bpm': 120.5,
-            'bpm_confidence': 85.3,
-            'bpm_candidates': [(120.5, 45), (241.0, 23)],
-            'key': 'C Major',
-            'key_confidence': 78.9
+            "filename": "test.wav",
+            "bpm": 120.5,
+            "bpm_confidence": 85.3,
+            "bpm_candidates": [(120.5, 45), (241.0, 23)],
+            "key": "C Major",
+            "key_confidence": 78.9,
         }
-        
+
         # Capture stdout
         captured_output = io.StringIO()
-        with patch('sys.stdout', captured_output):
+        with patch("sys.stdout", captured_output):
             print_results(results, detect_key=True)
-        
+
         output = captured_output.getvalue()
-        
+
         # Check that key information is present
-        self.assertIn('C Major', output)
-        self.assertIn('78.9%', output)
-        self.assertIn('Estimated Key', output)
-    
-    @patch('bpm_detector.cli.AudioAnalyzer')
-    @patch('soundfile.info')
+        self.assertIn("C Major", output)
+        self.assertIn("78.9%", output)
+        self.assertIn("Estimated Key", output)
+
+    @patch("bpm_detector.cli.AudioAnalyzer")
+    @patch("soundfile.info")
     def test_analyze_file_success(self, mock_sf_info, mock_analyzer_class):
         """Test successful file analysis."""
         # Mock file info
         mock_info = MagicMock()
         mock_info.frames = 44100
         mock_sf_info.return_value = mock_info
-        
+
         # Mock analyzer
         mock_analyzer = MagicMock()
         mock_analyzer.analyze_file.return_value = {
-            'filename': 'test.wav',
-            'bpm': 120.0,
-            'bpm_confidence': 85.0,
-            'bpm_candidates': [(120.0, 45)]
+            "filename": "test.wav",
+            "bpm": 120.0,
+            "bpm_confidence": 85.0,
+            "bpm_candidates": [(120.0, 45)],
         }
         mock_analyzer_class.return_value = mock_analyzer
-        
+
         # Mock args
         args = MagicMock()
         args.sr = 22050
@@ -84,121 +84,124 @@ class TestCLI(unittest.TestCase):
         args.min_bpm = 40.0
         args.max_bpm = 300.0
         args.start_bpm = 150.0
-        
+
         # Capture stdout to avoid cluttering test output
-        with patch('sys.stdout', io.StringIO()):
-            analyze_file('test.wav', mock_analyzer, args)
-        
+        with patch("sys.stdout", io.StringIO()):
+            analyze_file("test.wav", mock_analyzer, args)
+
         # Verify analyzer was called correctly
         mock_analyzer.analyze_file.assert_called_once()
         call_args = mock_analyzer.analyze_file.call_args
-        self.assertEqual(call_args[1]['path'], 'test.wav')
-        self.assertEqual(call_args[1]['detect_key'], False)
-    
-    @patch('bpm_detector.cli.AudioAnalyzer')
-    @patch('soundfile.info')
+        self.assertEqual(call_args[1]["path"], "test.wav")
+        self.assertEqual(call_args[1]["detect_key"], False)
+
+    @patch("bpm_detector.cli.AudioAnalyzer")
+    @patch("soundfile.info")
     def test_analyze_file_with_error(self, mock_sf_info, mock_analyzer_class):
         """Test file analysis with error handling."""
         # Mock analyzer to raise an exception
         mock_analyzer = MagicMock()
         mock_analyzer.analyze_file.side_effect = Exception("Test error")
         mock_analyzer_class.return_value = mock_analyzer
-        
+
         # Mock file info
         mock_info = MagicMock()
         mock_info.frames = 44100
         mock_sf_info.return_value = mock_info
-        
+
         # Mock args
         args = MagicMock()
         args.sr = 22050
         args.progress = False
         args.detect_key = False
-        
+
         # Capture stdout
         captured_output = io.StringIO()
-        with patch('sys.stdout', captured_output):
-            analyze_file('test.wav', mock_analyzer, args)
-        
+        with patch("sys.stdout", captured_output):
+            analyze_file("test.wav", mock_analyzer, args)
+
         output = captured_output.getvalue()
-        
+
         # Should contain error message
-        self.assertIn('Error processing', output)
-        self.assertIn('test.wav', output)
-    
-    @patch('bpm_detector.cli.analyze_file')
-    @patch('os.path.exists')
+        self.assertIn("Error processing", output)
+        self.assertIn("test.wav", output)
+
+    @patch("bpm_detector.cli.analyze_file")
+    @patch("os.path.exists")
     def test_main_single_file(self, mock_exists, mock_analyze):
         """Test main function with single file."""
         mock_exists.return_value = True
-        
-        test_args = ['bpm-detector', 'test.wav']
-        
-        with patch('sys.argv', test_args):
-            with patch('sys.stdout', io.StringIO()):
+
+        test_args = ["bpm-detector", "test.wav"]
+
+        with patch("sys.argv", test_args):
+            with patch("sys.stdout", io.StringIO()):
                 main()
-        
+
         # Should call analyze_file once
         self.assertEqual(mock_analyze.call_count, 1)
-    
-    @patch('bpm_detector.cli.analyze_file')
-    @patch('os.path.exists')
+
+    @patch("bpm_detector.cli.analyze_file")
+    @patch("os.path.exists")
     def test_main_multiple_files(self, mock_exists, mock_analyze):
         """Test main function with multiple files."""
         mock_exists.return_value = True
-        
-        test_args = ['bpm-detector', 'test1.wav', 'test2.wav', 'test3.wav']
-        
-        with patch('sys.argv', test_args):
-            with patch('sys.stdout', io.StringIO()):
+
+        test_args = ["bpm-detector", "test1.wav", "test2.wav", "test3.wav"]
+
+        with patch("sys.argv", test_args):
+            with patch("sys.stdout", io.StringIO()):
                 main()
-        
+
         # Should call analyze_file for each file
         self.assertEqual(mock_analyze.call_count, 3)
-    
-    @patch('os.path.exists')
+
+    @patch("os.path.exists")
     def test_main_missing_file(self, mock_exists):
         """Test main function with missing file."""
         mock_exists.return_value = False
-        
-        test_args = ['bpm-detector', 'missing.wav']
-        
+
+        test_args = ["bpm-detector", "missing.wav"]
+
         captured_output = io.StringIO()
-        with patch('sys.argv', test_args):
-            with patch('sys.stdout', captured_output):
+        with patch("sys.argv", test_args):
+            with patch("sys.stdout", captured_output):
                 main()
-        
+
         output = captured_output.getvalue()
-        
+
         # Should show file not found message
-        self.assertIn('File not found', output)
-        self.assertIn('missing.wav', output)
-    
+        self.assertIn("File not found", output)
+        self.assertIn("missing.wav", output)
+
     def test_main_with_options(self):
         """Test main function with various command line options."""
         test_args = [
-            'bpm-detector',
-            '--detect-key',
-            '--progress',
-            '--sr', '44100',
-            '--min_bpm', '60',
-            '--max_bpm', '200',
-            'test.wav'
+            "bpm-detector",
+            "--detect-key",
+            "--progress",
+            "--sr",
+            "44100",
+            "--min_bpm",
+            "60",
+            "--max_bpm",
+            "200",
+            "test.wav",
         ]
-        
-        with patch('sys.argv', test_args):
-            with patch('bpm_detector.cli.analyze_file') as mock_analyze:
-                with patch('os.path.exists', return_value=True):
-                    with patch('sys.stdout', io.StringIO()):
+
+        with patch("sys.argv", test_args):
+            with patch("bpm_detector.cli.analyze_file") as mock_analyze:
+                with patch("os.path.exists", return_value=True):
+                    with patch("sys.stdout", io.StringIO()):
                         main()
-        
+
         # Check that analyze_file was called
         self.assertEqual(mock_analyze.call_count, 1)
-        
+
         # Check the args passed to analyze_file
         call_args = mock_analyze.call_args[0]
         args = call_args[2]  # Third argument is the args object
-        
+
         self.assertTrue(args.detect_key)
         self.assertTrue(args.progress)
         self.assertEqual(args.sr, 44100)
@@ -206,5 +209,5 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(args.max_bpm, 200.0)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
