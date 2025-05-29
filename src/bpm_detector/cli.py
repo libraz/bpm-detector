@@ -3,13 +3,18 @@
 import argparse
 import math
 import os
+import warnings
 from typing import Optional
 
 import soundfile as sf
 from colorama import Fore, Style, init
 from tqdm import tqdm
 
-from .detector import BIN_WIDTH, HOP_DEFAULT, SR_DEFAULT, AudioAnalyzer
+# Suppress sklearn warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning, module="sklearn")
+warnings.filterwarnings("ignore", category=UserWarning, module="librosa")
+
+from .music_analyzer import BIN_WIDTH, HOP_DEFAULT, SR_DEFAULT, AudioAnalyzer
 
 # Initialize colorama for cross-platform colored output
 init(autoreset=True)
@@ -24,14 +29,50 @@ def progress_bar(total_frames: int, sr: int) -> tqdm:
     return bar
 
 
-def print_results(results: dict, detect_key: bool = False) -> None:
+def print_results(results: dict, detect_key: bool = False, comprehensive: bool = False) -> None:
     """Print analysis results with colored output."""
-    filename = os.path.basename(results["filename"])
-    bpm = results["bpm"]
-    bpm_conf = results["bpm_confidence"]
-    candidates = results["bpm_candidates"]
+    # Handle new result format with basic_info
+    if "basic_info" in results:
+        basic_info = results["basic_info"]
+        filename = os.path.basename(basic_info["filename"])
+        bpm = basic_info["bpm"]
+        bpm_conf = basic_info["bpm_confidence"]
+        candidates = basic_info["bpm_candidates"]
+    else:
+        # Fallback to old format
+        filename = os.path.basename(results["filename"])
+        bpm = results["bpm"]
+        bpm_conf = results["bpm_confidence"]
+        candidates = results["bpm_candidates"]
 
     print(f"\n{Fore.CYAN}{Style.BRIGHT}{filename}{Style.RESET_ALL}")
+    
+    if comprehensive and "basic_info" in results:
+        # Show comprehensive summary first
+        duration = basic_info.get("duration", 0)
+        print(f"  {Fore.YELLOW}> Duration: {duration:.1f}s, BPM: {bpm:.1f}, Key: {basic_info.get('key', 'Unknown')}{Style.RESET_ALL}")
+        
+        # Show additional analysis if available
+        if "chord_progression" in results:
+            chords = results["chord_progression"]
+            main_prog = chords.get("main_progression", [])
+            if main_prog:
+                print(f"  {Fore.BLUE}> Chord Progression: {' → '.join(main_prog[:4])}{Style.RESET_ALL}")
+        
+        if "structure" in results:
+            structure = results["structure"]
+            form = structure.get("form", "Unknown")
+            sections = structure.get("section_count", 0)
+            print(f"  {Fore.BLUE}> Structure: {form} ({sections} sections){Style.RESET_ALL}")
+        
+        if "rhythm" in results:
+            rhythm = results["rhythm"]
+            time_sig = rhythm.get("time_signature", "4/4")
+            groove = rhythm.get("groove_type", "straight")
+            print(f"  {Fore.BLUE}> Rhythm: {time_sig} time, {groove} groove{Style.RESET_ALL}")
+        
+        print()  # Extra line for comprehensive results
+    
     print(f"  {Fore.YELLOW}> BPM Candidates Top10{Style.RESET_ALL}")
 
     for b, h in candidates:
@@ -44,12 +85,19 @@ def print_results(results: dict, detect_key: bool = False) -> None:
         f"  {Fore.GREEN}{Style.BRIGHT}> Estimated BPM : {bpm:.2f} BPM  (conf {bpm_conf:.1f}%){Style.RESET_ALL}"
     )
 
-    if detect_key and "key" in results:
-        key = results["key"]
-        key_conf = results["key_confidence"]
-        print(
-            f"  {Fore.MAGENTA}{Style.BRIGHT}> Estimated Key : {key}  (conf {key_conf:.1f}%){Style.RESET_ALL}"
-        )
+    if detect_key:
+        # Handle new result format
+        if "basic_info" in results:
+            key = basic_info.get("key")
+            key_conf = basic_info.get("key_confidence", 0.0)
+        else:
+            key = results.get("key")
+            key_conf = results.get("key_confidence", 0.0)
+            
+        if key:
+            print(
+                f"  {Fore.MAGENTA}{Style.BRIGHT}> Estimated Key : {key}  (conf {key_conf:.1f}%){Style.RESET_ALL}"
+            )
 
     print()
 
@@ -67,6 +115,7 @@ def analyze_file(path: str, analyzer: AudioAnalyzer, args: argparse.Namespace) -
         results = analyzer.analyze_file(
             path=path,
             detect_key=args.detect_key,
+            comprehensive=args.comprehensive,
             min_bpm=args.min_bpm,
             max_bpm=args.max_bpm,
             start_bpm=args.start_bpm,
@@ -76,7 +125,7 @@ def analyze_file(path: str, analyzer: AudioAnalyzer, args: argparse.Namespace) -
         if bar:
             bar.close()
 
-        print_results(results, args.detect_key)
+        print_results(results, args.detect_key, args.comprehensive)
 
     except Exception as e:
         if bar:
@@ -96,6 +145,9 @@ def main() -> None:
     parser.add_argument("--progress", action="store_true", help="Show progress bar")
     parser.add_argument(
         "--detect-key", action="store_true", help="Enable key detection"
+    )
+    parser.add_argument(
+        "--comprehensive", action="store_true", help="Enable comprehensive music analysis"
     )
 
     args = parser.parse_args()

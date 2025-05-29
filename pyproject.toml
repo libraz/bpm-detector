@@ -12,6 +12,11 @@ dependencies = [
     "numpy>=2.2.6",
     "tqdm>=4.67.1",
     "colorama>=0.4.6",
+    "scikit-learn>=1.3.0",
+    "scipy>=1.11.0",
+    "matplotlib>=3.7.0",
+    "seaborn>=0.12.0",
+    "pandas>=2.0.0",
 ]
 readme = "README.md"
 requires-python = ">= 3.8"
@@ -61,3 +66,22 @@ allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/bpm_detector"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "--strict-markers --strict-config --verbose"
+filterwarnings = [
+    "ignore::UserWarning:librosa.*",
+    "ignore::RuntimeWarning:sklearn.*",
+    "ignore::RuntimeWarning:numpy.*",
+    "ignore::FutureWarning",
+    "ignore::DeprecationWarning",
+    "ignore:n_fft=.*:UserWarning",
+    "ignore:Trying to estimate tuning.*:UserWarning",
+    "ignore:divide by zero encountered.*:RuntimeWarning",
+    "ignore:overflow encountered.*:RuntimeWarning",
+    "ignore:invalid value encountered.*:RuntimeWarning",
+]

@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from bpm_detector.detector import AudioAnalyzer, BPMDetector, KeyDetector
+from bpm_detector.music_analyzer import AudioAnalyzer, BPMDetector, KeyDetector
 
 
 class TestBPMDetector(unittest.TestCase):
