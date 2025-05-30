@@ -6,6 +6,10 @@ dist/
 docs/
 wheels/
 *.egg-info
+.coverage
+.htmlcov/
+.coverage.*
+examples/*.mp3
 
 # venv
 .venv

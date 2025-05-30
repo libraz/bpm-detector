@@ -69,7 +69,7 @@ class RhythmAnalyzer:
         
         return features
     
-    def detect_time_signature(self, onset_features: Dict[str, np.ndarray], 
+    def detect_time_signature(self, onset_features: Dict[str, np.ndarray],
                              sr: int) -> Tuple[str, float]:
         """Detect time signature from onset features.
         
@@ -83,26 +83,46 @@ class RhythmAnalyzer:
         beat_times = onset_features.get('beat_times', np.array([]))
         
         if len(beat_times) < 8:  # Need sufficient beats
-            return '4/4', 0.0
+            return '4/4', 0.5
         
         # Calculate inter-beat intervals
         beat_intervals = np.diff(beat_times)
         
         if len(beat_intervals) == 0:
-            return '4/4', 0.0
+            return '4/4', 0.5
         
         # Analyze beat patterns for different time signatures
+        # Start with strong bias toward 4/4
         best_signature = '4/4'
-        best_score = 0.0
+        best_score = 0.6  # Give 4/4 a head start
         
+        # Score 4/4 first with bias
+        four_four_score = self._score_time_signature(beat_intervals, self.TIME_SIGNATURES['4/4'], onset_features)
+        four_four_score += 0.3  # Add bias for 4/4
+        
+        if four_four_score > best_score:
+            best_score = four_four_score
+            best_signature = '4/4'
+        
+        # Only check other signatures if they significantly outperform 4/4
         for signature, info in self.TIME_SIGNATURES.items():
+            if signature == '4/4':
+                continue  # Already checked
+                
             score = self._score_time_signature(beat_intervals, info, onset_features)
             
-            if score > best_score:
+            # Require significantly higher score to override 4/4
+            threshold = 0.8 if signature in ['3/4', '2/4'] else 0.9
+            
+            if score > threshold and score > best_score:
                 best_score = score
                 best_signature = signature
         
-        return best_signature, best_score
+        # Cap confidence and ensure 4/4 for uncertain cases
+        if best_score < 0.7 and best_signature != '4/4':
+            return '4/4', 0.6
+        
+        return best_signature, min(1.0, best_score)
     
     def _score_time_signature(self, beat_intervals: np.ndarray, 
                              signature_info: Dict[str, Any],

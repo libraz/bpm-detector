@@ -10,8 +10,9 @@ from sklearn.cluster import KMeans
 class ChordProgressionAnalyzer:
     """Analyzes chord progressions and harmonic features."""
     
-    # Major and minor chord templates (chroma vectors)
+    # Enhanced chord templates including 7th and sus chords for J-Pop
     CHORD_TEMPLATES = {
+        # Major triads
         'C': [1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0],      # C major
         'C#': [0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0],     # C# major
         'D': [0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0],      # D major
@@ -24,6 +25,8 @@ class ChordProgressionAnalyzer:
         'A': [0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0],      # A major
         'A#': [0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0],     # A# major
         'B': [0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1],      # B major
+        
+        # Minor triads
         'Cm': [1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0],     # C minor
         'C#m': [0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],    # C# minor
         'Dm': [0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0],     # D minor
@@ -36,6 +39,19 @@ class ChordProgressionAnalyzer:
         'Am': [1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0],     # A minor
         'A#m': [0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0],    # A# minor
         'Bm': [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1],     # B minor
+        
+        # Dominant 7th chords (common in J-Pop)
+        'C7': [1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0],     # C7
+        'D7': [0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1],     # D7
+        'D#7': [1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0],    # D#7
+        'F#7': [0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1],    # F#7
+        'G7': [1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1],     # G7
+        
+        # Sus4 chords (common in J-Pop)
+        'Csus4': [1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0], # Csus4
+        'Dsus4': [0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0], # Dsus4
+        'Fsus4': [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0], # Fsus4
+        'Gsus4': [1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0], # Gsus4
     }
     
     # Roman numeral mapping for functional analysis
@@ -61,7 +77,7 @@ class ChordProgressionAnalyzer:
         self.frame_size = frame_size
         
     def extract_chroma_features(self, y: np.ndarray, sr: int) -> np.ndarray:
-        """Extract high-resolution chroma features.
+        """Extract high-resolution chroma features with noise reduction.
         
         Args:
             y: Audio signal
@@ -70,25 +86,60 @@ class ChordProgressionAnalyzer:
         Returns:
             Chroma features matrix (12 x time_frames)
         """
+        # Apply high-pass filter to remove low-frequency noise
+        from scipy.signal import butter, filtfilt
+        nyquist = sr / 2
+        high_cutoff = 80.0  # Remove frequencies below 80Hz
+        high_normal = high_cutoff / nyquist
+        b, a = butter(4, high_normal, btype='high', analog=False)
+        y_filtered = filtfilt(b, a, y)
+        
+        # Apply harmonic-percussive separation for cleaner harmonic content
+        y_harmonic, _ = librosa.effects.hpss(y_filtered, margin=3.0)
+        
         # Use CQT-based chroma for better harmonic resolution
         chroma = librosa.feature.chroma_cqt(
-            y=y, 
-            sr=sr, 
+            y=y_harmonic,
+            sr=sr,
             hop_length=self.hop_length,
-            fmin=librosa.note_to_hz('C1'),
-            n_chroma=12
+            fmin=librosa.note_to_hz('C2'),  # Start from C2
+            n_chroma=12,
+            norm=2  # L2 normalization
         )
         
-        # Normalize each frame
-        chroma = librosa.util.normalize(chroma, axis=0)
+        # Apply 2-second moving window average for stability
+        window_frames = int(2.0 * sr / self.hop_length)  # 2 seconds
+        if window_frames > 1:
+            chroma = self._apply_moving_average(chroma, window_frames)
         
         return chroma
     
-    def detect_chords(self, chroma: np.ndarray) -> List[Tuple[str, float, int, int]]:
-        """Detect chords from chroma features.
+    def _apply_moving_average(self, chroma: np.ndarray, window_size: int) -> np.ndarray:
+        """Apply moving average to chroma features for stability.
+        
+        Args:
+            chroma: Input chroma matrix
+            window_size: Size of moving window in frames
+            
+        Returns:
+            Smoothed chroma matrix
+        """
+        smoothed = np.zeros_like(chroma)
+        half_window = window_size // 2
+        
+        for i in range(chroma.shape[1]):
+            start = max(0, i - half_window)
+            end = min(chroma.shape[1], i + half_window + 1)
+            smoothed[:, i] = np.mean(chroma[:, start:end], axis=1)
+        
+        return smoothed
+    
+    def detect_chords(self, chroma: np.ndarray, bpm: float = 130.0) -> List[Tuple[str, float, int, int]]:
+        """Detect chords from chroma features with dynamic window sizing.
         
         Args:
             chroma: Chroma features matrix
+            bpm: BPM for dynamic window calculation
             
         Returns:
             List of (chord_name, confidence, start_frame, end_frame)
@@ -96,8 +147,14 @@ class ChordProgressionAnalyzer:
         chords = []
         n_frames = chroma.shape[1]
         
-        # Segment chroma into chord-sized windows
-        window_size = max(1, int(22050 * 1.0 / self.hop_length))  # 1.0 second windows (assuming 22050 Hz)
+        # ------------------------------------------------------------------
+        # For Verse/Chorus that repeat every 4 bars (≈ 7.3s),
+        # window size = 2 bars (1/2) is appropriate for chord detection
+        # ------------------------------------------------------------------
+        bars_per_window = 2
+        window_duration = (bars_per_window * 4 * 60.0) / bpm  # 2 bars in seconds
+        window_duration = max(1.0, window_duration)  # At least 1 second
+        window_size = max(1, int(22050 * window_duration / self.hop_length))
         step_size = max(1, window_size // 4)  # Overlap windows for better detection
         
         detected_chords = []
@@ -111,7 +168,11 @@ class ChordProgressionAnalyzer:
             # Find best matching chord
             best_chord, confidence = self._match_chord_template(window_chroma)
             
-            if confidence > 0.65:  # Higher threshold for better accuracy
+            # Adaptive confidence threshold based on signal strength
+            signal_strength = np.max(window_chroma)
+            adaptive_threshold = max(0.4, 0.65 - (1.0 - signal_strength) * 0.2)
+            
+            if confidence > adaptive_threshold:
                 detected_chords.append((best_chord, confidence, i, end_frame))
         
         # Merge consecutive identical chords
@@ -120,7 +181,7 @@ class ChordProgressionAnalyzer:
         return chords
     
     def _match_chord_template(self, chroma_frame: np.ndarray) -> Tuple[str, float]:
-        """Match chroma frame to chord templates.
+        """Match chroma frame to chord templates with improved root detection.
         
         Args:
             chroma_frame: Single chroma vector
@@ -128,14 +189,38 @@ class ChordProgressionAnalyzer:
         Returns:
             (best_chord_name, confidence)
         """
+        # Enhanced chord detection with 3-note clustering
         best_chord = 'N'  # No chord
         best_score = 0.0
         
+        # Find the top 3 strongest notes for clustering
+        top_3_indices = np.argsort(chroma_frame)[-3:]
+        top_3_strengths = chroma_frame[top_3_indices]
+        
+        # Only proceed if we have significant energy in top notes
+        if np.max(top_3_strengths) < 0.1:
+            return 'N', 0.0
+        
+        # Try to identify chord based on top 3 notes
+        cluster_chord = self._identify_chord_from_cluster(top_3_indices, top_3_strengths)
+        if cluster_chord:
+            cluster_score = np.mean(top_3_strengths)
+            if cluster_score > best_score:
+                best_score = cluster_score
+                best_chord = cluster_chord
+        
+        # Also try template matching for comparison
         for chord_name, template in self.CHORD_TEMPLATES.items():
-            template = np.array(template)
+            template = np.array(template, dtype=np.float32)
             
-            # Calculate correlation
-            correlation = np.corrcoef(chroma_frame, template)[0, 1]
+            # Improved correlation calculation (cosine similarity)
+            chroma_norm = np.linalg.norm(chroma_frame)
+            template_norm = np.linalg.norm(template)
+            
+            if chroma_norm > 1e-8 and template_norm > 1e-8:
+                correlation = np.dot(chroma_frame, template) / (chroma_norm * template_norm)
+            else:
+                correlation = 0.0
             
             # Handle NaN values
             if np.isnan(correlation):
@@ -146,6 +231,41 @@ class ChordProgressionAnalyzer:
                 best_chord = chord_name
         
         return best_chord, max(0.0, best_score)
+    
+    def _identify_chord_from_cluster(self, note_indices: np.ndarray, strengths: np.ndarray) -> str:
+        """Identify chord from top 3 notes using music theory.
+        
+        Args:
+            note_indices: Indices of top 3 notes
+            strengths: Strengths of top 3 notes
+            
+        Returns:
+            Chord name or None
+        """
+        if len(note_indices) < 3:
+            return None
+        
+        # Sort by strength (strongest first)
+        sorted_indices = note_indices[np.argsort(strengths)[::-1]]
+        
+        # Try different root assumptions
+        for root_idx in sorted_indices:
+            # Check for major triad (root, major third, fifth)
+            major_third = (root_idx + 4) % 12
+            fifth = (root_idx + 7) % 12
+            
+            if major_third in note_indices and fifth in note_indices:
+                note_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+                return note_names[root_idx]
+            
+            # Check for minor triad (root, minor third, fifth)
+            minor_third = (root_idx + 3) % 12
+            
+            if minor_third in note_indices and fifth in note_indices:
+                note_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+                return note_names[root_idx] + 'm'
+        
+        return None
     
     def _merge_consecutive_chords(self, chords: List[Tuple[str, float, int, int]]) -> List[Tuple[str, float, int, int]]:
         """Merge consecutive identical chords.
@@ -217,8 +337,10 @@ class ChordProgressionAnalyzer:
                 'chord_changes': 0
             }
         
-        # Find most common progression pattern
-        main_progression = self._find_main_progression(chord_names)
+        # ------------------------------------------------------------------
+        # For 4-bar progression fixed songs, prioritize 4-degree progression patterns
+        # ------------------------------------------------------------------
+        main_progression = self._find_main_progression(chord_names, pattern_length=4)
         
         # Calculate harmonic rhythm (chord changes per second)
         total_duration = sum(chord[3] - chord[2] for chord in chords)
@@ -451,13 +573,14 @@ class ChordProgressionAnalyzer:
         
         return fitting_chords / len(chord_names) if chord_names else 0.0
     
-    def analyze(self, y: np.ndarray, sr: int, key: str = None) -> Dict[str, Any]:
+    def analyze(self, y: np.ndarray, sr: int, key: str = None, bpm: float = 130.0) -> Dict[str, Any]:
         """Perform complete chord progression analysis.
         
         Args:
             y: Audio signal
             sr: Sample rate
             key: Optional key information
+            bpm: BPM for dynamic window calculation
             
         Returns:
             Complete chord analysis results
@@ -465,8 +588,8 @@ class ChordProgressionAnalyzer:
         # Extract chroma features
         chroma = self.extract_chroma_features(y, sr)
         
-        # Detect chords
-        chords = self.detect_chords(chroma)
+        # Detect chords with dynamic window sizing
+        chords = self.detect_chords(chroma, bpm)
         
         # Analyze progression
         progression_analysis = self.analyze_progression(chords)

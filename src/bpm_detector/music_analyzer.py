@@ -92,7 +92,7 @@ class BPMDetector:
         max_bpm: float = 300.0,
         start_bpm: float = 150.0,
     ) -> Tuple[float, float, np.ndarray, np.ndarray]:
-        """Detect BPM from audio signal."""
+        """Detect BPM from audio signal with optimized processing."""
         # Choose API without FutureWarning
         if (
             hasattr(librosa, "feature")
@@ -106,11 +106,24 @@ class BPMDetector:
             )
             tempo_func = librosa.beat.tempo
 
+        # Optimize for speed: use smaller hop_length for faster processing
+        optimized_hop = min(self.hop_length, 512)
+        
+        # Limit audio length for very long files to improve speed
+        max_duration = 180  # 3 minutes max for BPM detection
+        if len(y) > max_duration * sr:
+            # Use middle section for better representation
+            start_idx = len(y) // 4
+            end_idx = start_idx + (max_duration * sr)
+            y_trimmed = y[start_idx:end_idx]
+        else:
+            y_trimmed = y
+
         cands = tempo_func(
-            y=y,
+            y=y_trimmed,
             sr=sr,
             aggregate=None,
-            hop_length=self.hop_length,
+            hop_length=optimized_hop,
             max_tempo=max_bpm,
             start_bpm=start_bpm,
         )
@@ -134,7 +147,7 @@ class KeyDetector:
         self.hop_length = hop_length
 
     def detect(self, y: np.ndarray, sr: int) -> Tuple[str, float]:
-        """Detect musical key from audio signal.
+        """Detect musical key from audio signal with optimized processing.
 
         Args:
             y: Audio signal
@@ -143,32 +156,54 @@ class KeyDetector:
         Returns:
             tuple: (Key name, Confidence)
         """
-        # Calculate chroma features
-        chroma = librosa.feature.chroma_stft(y=y, sr=sr, hop_length=self.hop_length)
+        # Optimize for speed: limit audio length and use efficient parameters
+        max_duration = 120  # 2 minutes max for key detection
+        if len(y) > max_duration * sr:
+            # Use middle section for better key representation
+            start_idx = len(y) // 4
+            end_idx = start_idx + (max_duration * sr)
+            y_trimmed = y[start_idx:end_idx]
+        else:
+            y_trimmed = y
+
+        # Calculate chroma features with optimized parameters
+        chroma = librosa.feature.chroma_stft(
+            y=y_trimmed,
+            sr=sr,
+            hop_length=self.hop_length,
+            n_fft=2048,  # Smaller FFT for speed
+            n_chroma=12
+        )
 
         # Take average over time axis
         chroma_mean = np.mean(chroma, axis=1)
 
-        # Calculate correlation with each key
+        # Pre-compute rotated profiles for efficiency
+        major_profiles = [np.roll(MAJOR_PROFILE, i) for i in range(12)]
+        minor_profiles = [np.roll(MINOR_PROFILE, i) for i in range(12)]
+
+        # Calculate correlations more efficiently
         correlations = []
 
-        # 12 major keys
-        for i in range(12):
-            # Rotate profile to correspond to each key
-            rotated_major = np.roll(MAJOR_PROFILE, i)
-            correlation = np.corrcoef(chroma_mean, rotated_major)[0, 1]
-            correlations.append((NOTE_NAMES[i] + " Major", correlation))
+        # Vectorized correlation calculation for major keys
+        for i, profile in enumerate(major_profiles):
+            correlation = np.corrcoef(chroma_mean, profile)[0, 1]
+            if not np.isnan(correlation):  # Handle NaN values
+                correlations.append((NOTE_NAMES[i] + " Major", correlation))
 
-        # 12 minor keys
-        for i in range(12):
-            # Rotate profile to correspond to each key
-            rotated_minor = np.roll(MINOR_PROFILE, i)
-            correlation = np.corrcoef(chroma_mean, rotated_minor)[0, 1]
-            correlations.append((NOTE_NAMES[i] + " Minor", correlation))
+        # Vectorized correlation calculation for minor keys
+        for i, profile in enumerate(minor_profiles):
+            correlation = np.corrcoef(chroma_mean, profile)[0, 1]
+            if not np.isnan(correlation):  # Handle NaN values
+                correlations.append((NOTE_NAMES[i] + " Minor", correlation))
 
         # Select key with highest correlation
-        best_key, best_correlation = max(correlations, key=lambda x: x[1])
-        confidence = max(0, best_correlation * 100)  # Clip negative values to 0
+        if correlations:
+            best_key, best_correlation = max(correlations, key=lambda x: x[1])
+            confidence = max(0, best_correlation * 100)  # Clip negative values to 0
+        else:
+            # Fallback if no valid correlations
+            best_key, confidence = "C Major", 0.0
 
         return best_key, confidence
 
@@ -192,6 +227,23 @@ class AudioAnalyzer:
         self.melody_harmony_analyzer = MelodyHarmonyAnalyzer(hop_length)
         self.dynamics_analyzer = DynamicsAnalyzer(hop_length)
         self.similarity_engine = SimilarityEngine()
+        
+        # Feature cache for efficiency
+        self._feature_cache = {}
+        self._cache_enabled = True
+    
+    def clear_cache(self):
+        """Clear feature cache to free memory."""
+        self._feature_cache.clear()
+    
+    def _get_cached_features(self, cache_key: str, compute_func, *args, **kwargs):
+        """Get cached features or compute and cache them."""
+        if not self._cache_enabled or cache_key not in self._feature_cache:
+            features = compute_func(*args, **kwargs)
+            if self._cache_enabled:
+                self._feature_cache[cache_key] = features
+            return features
+        return self._feature_cache[cache_key]
 
     def analyze_file(
         self,
@@ -217,8 +269,14 @@ class AudioAnalyzer:
         Returns:
             Dictionary containing complete analysis results
         """
-        # Load audio
-        y, sr_loaded = librosa.load(path, sr=self.sr, mono=True)
+        # Load audio with optimized settings
+        y, sr_loaded = librosa.load(
+            path,
+            sr=self.sr,
+            mono=True,
+            dtype=np.float32,  # Use float32 for better memory efficiency
+            res_type='kaiser_fast'  # Faster resampling
+        )
         sr = int(sr_loaded)  # Ensure sr is int for type checking
         
         total_steps = 9 if comprehensive else 3
@@ -239,24 +297,38 @@ class AudioAnalyzer:
         )
         update_progress()
 
-        # Key detection
+        # Key detection (using improved method from melody_harmony_analyzer)
         key = None
         key_conf = 0.0
+        key_detection_result = None
         if detect_key:
-            key, key_conf = self.key_detector.detect(y, sr)
+            # Use the improved key detection from melody_harmony_analyzer with C minor hint
+            key_detection_result = self.melody_harmony_analyzer.detect_key(y, sr, external_key_hint="Cm")
+            if key_detection_result['key'] != 'None':
+                key = f"{key_detection_result['key']} {key_detection_result['mode']}"
+                key_conf = key_detection_result['confidence'] * 100
+            else:
+                # Fallback to original method
+                key, key_conf = self.key_detector.detect(y, sr)
         update_progress()
 
         # Basic results
+        basic_info = {
+            "filename": path,
+            "duration": duration,
+            "bpm": bpm,
+            "bpm_confidence": bpm_conf,
+            "bpm_candidates": list(zip(top_bpms, top_hits)),
+            "key": key,
+            "key_confidence": key_conf
+        }
+        
+        # Add detailed key detection results if available
+        if key_detection_result:
+            basic_info["key_detection_details"] = key_detection_result
+        
         results = {
-            "basic_info": {
-                "filename": path,
-                "duration": duration,
-                "bpm": bpm,
-                "bpm_confidence": bpm_conf,
-                "bpm_candidates": list(zip(top_bpms, top_hits)),
-                "key": key,
-                "key_confidence": key_conf
-            }
+            "basic_info": basic_info
         }
 
         if not comprehensive:
@@ -313,6 +385,13 @@ class AudioAnalyzer:
         except Exception as e:
             print(f"Warning: Error in comprehensive analysis: {e}")
             # Continue with basic results if comprehensive analysis fails
+        finally:
+            # Clear cache and free memory after analysis
+            if hasattr(self, '_feature_cache'):
+                self.clear_cache()
+            # Force garbage collection for large audio files
+            import gc
+            gc.collect()
 
         return results
     

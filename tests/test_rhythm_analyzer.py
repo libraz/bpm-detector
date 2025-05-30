@@ -256,5 +256,137 @@ class TestRhythmAnalyzer(unittest.TestCase):
         self.assertLess(irregularity, regularity)
 
 
+    def test_enhanced_groove_detection(self):
+        """Test enhanced groove detection features."""
+        # Create test audio with swing feel
+        duration = 4.0
+        sr = 22050
+        t = np.linspace(0, duration, int(sr * duration))
+        
+        # Create swing pattern (long-short-long-short)
+        beat_times = np.array([0, 0.67, 1.0, 1.67, 2.0, 2.67, 3.0, 3.67])  # Swing eighths
+        swing_audio = np.zeros_like(t)
+        
+        for beat_time in beat_times:
+            beat_idx = int(beat_time * sr)
+            if beat_idx < len(swing_audio):
+                # Add a short percussive sound
+                decay = np.exp(-10 * (t - beat_time))
+                decay[t < beat_time] = 0
+                swing_audio += 0.5 * np.sin(2 * np.pi * 200 * t) * decay
+        
+        results = self.analyzer.analyze(swing_audio, sr)
+        
+        # Check groove detection
+        self.assertIn('groove_type', results)
+        groove_type = results['groove_type']
+        self.assertIsInstance(groove_type, str)
+        
+        # Check swing ratio
+        if 'swing_ratio' in results:
+            swing_ratio = results['swing_ratio']
+            self.assertIsInstance(swing_ratio, (int, float))
+            self.assertGreaterEqual(swing_ratio, 0.5)  # Should detect swing
+            self.assertLessEqual(swing_ratio, 1.0)
+
+    def test_subdivision_density_analysis(self):
+        """Test subdivision density analysis."""
+        # Create dense rhythmic pattern
+        dense_onsets = np.arange(0, 4, 0.125)  # 32nd notes
+        beat_times = np.arange(0, 4, 0.5)  # Beat times array
+        
+        dense_density = self.analyzer._calculate_subdivision_density(dense_onsets, beat_times)
+        
+        # Create sparse rhythmic pattern
+        sparse_onsets = np.arange(0, 4, 1.0)  # Quarter notes
+        
+        sparse_density = self.analyzer._calculate_subdivision_density(sparse_onsets, beat_times)
+        
+        # Dense pattern should have higher density
+        self.assertGreater(dense_density, sparse_density)
+        
+        # Both should be valid values
+        self.assertIsInstance(dense_density, (int, float))
+        self.assertIsInstance(sparse_density, (int, float))
+        self.assertGreaterEqual(dense_density, 0.0)
+        self.assertGreaterEqual(sparse_density, 0.0)
+
+    def test_time_signature_confidence(self):
+        """Test time signature detection confidence."""
+        # Create clear 4/4 pattern
+        clear_44_onsets = np.array([0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5])
+        
+        onset_features = {'onset_times': clear_44_onsets}
+        
+        time_sig_result = self.analyzer.detect_time_signature(onset_features, 120.0)
+        
+        # detect_time_signature returns (time_signature, confidence) tuple
+        if isinstance(time_sig_result, tuple):
+            time_signature, confidence = time_sig_result
+            self.assertIsInstance(time_signature, str)
+            self.assertIsInstance(confidence, (int, float))
+        else:
+            # If it returns a dict
+            self.assertIn('time_signature', time_sig_result)
+            self.assertIn('confidence', time_sig_result)
+            confidence = time_sig_result['confidence']
+        self.assertIsInstance(confidence, (int, float))
+        self.assertGreaterEqual(confidence, 0.0)
+        self.assertLessEqual(confidence, 1.0)
+
+    def test_rhythmic_complexity_edge_cases(self):
+        """Test rhythmic complexity with edge cases."""
+        # Test with very few onsets
+        few_onsets = np.array([0, 2])
+        beat_times = np.array([0, 1, 2])  # Create beat times array
+        
+        few_complexity = self.analyzer._calculate_rhythmic_complexity(few_onsets, beat_times)
+        self.assertIsInstance(few_complexity, (int, float))
+        self.assertGreaterEqual(few_complexity, 0.0)
+        self.assertLessEqual(few_complexity, 1.0)
+        
+        # Test with many onsets
+        many_onsets = np.linspace(0, 4, 100)
+        many_beat_times = np.linspace(0, 4, 17)  # Create beat times array
+        
+        many_complexity = self.analyzer._calculate_rhythmic_complexity(many_onsets, many_beat_times)
+        self.assertIsInstance(many_complexity, (int, float))
+        self.assertGreaterEqual(many_complexity, 0.0)
+        self.assertLessEqual(many_complexity, 1.0)
+        
+        # Many onsets should generally have higher complexity
+        self.assertGreater(many_complexity, few_complexity)
+
+    def test_comprehensive_rhythm_analysis(self):
+        """Test comprehensive rhythm analysis integration."""
+        # Create complex rhythmic audio
+        duration = 8.0
+        sr = 22050
+        t = np.linspace(0, duration, int(sr * duration))
+        
+        # Create layered rhythm with kick, snare, and hi-hat
+        rhythm_audio = np.zeros_like(t)
+        
+        # Kick on beats 1 and 3
+        kick_times = np.arange(0, duration, 1.0)
+        for kick_time in kick_times:
+            kick_idx = int(kick_time * sr)
+            if kick_idx < len(rhythm_audio):
+                # Low frequency kick
+                kick_env = np.exp(-5 * (t - kick_time))
+                kick_env[t < kick_time] = 0
+                rhythm_audio += 0.8 * np.sin(2 * np.pi * 60 * t) * kick_env
+        
+        results = self.analyzer.analyze(rhythm_audio, sr)
+        
+        # Should detect clear 4/4 pattern
+        self.assertEqual(results['time_signature'], '4/4')
+        
+        # Should have reasonable complexity
+        complexity = results['rhythmic_complexity']
+        self.assertGreater(complexity, 0.0)  # Should have some complexity
+        self.assertLess(complexity, 1.0)     # But not overly complex
+
+
 if __name__ == '__main__':
     unittest.main()

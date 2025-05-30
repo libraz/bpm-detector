@@ -6,7 +6,7 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-from bpm_detector.cli import analyze_file, main, print_results
+from bpm_detector.cli import analyze_file_with_progress, main, print_results
 
 
 class TestCLI(unittest.TestCase):
@@ -79,7 +79,7 @@ class TestCLI(unittest.TestCase):
         # Mock args
         args = MagicMock()
         args.sr = 22050
-        args.progress = False
+        args.detailed_progress = False
         args.detect_key = False
         args.min_bpm = 40.0
         args.max_bpm = 300.0
@@ -87,7 +87,7 @@ class TestCLI(unittest.TestCase):
 
         # Capture stdout to avoid cluttering test output
         with patch("sys.stdout", io.StringIO()):
-            analyze_file("test.wav", mock_analyzer, args)
+            analyze_file_with_progress("test.wav", mock_analyzer, args)
 
         # Verify analyzer was called correctly
         mock_analyzer.analyze_file.assert_called_once()
@@ -112,13 +112,13 @@ class TestCLI(unittest.TestCase):
         # Mock args
         args = MagicMock()
         args.sr = 22050
-        args.progress = False
+        args.detailed_progress = False
         args.detect_key = False
 
         # Capture stdout
         captured_output = io.StringIO()
         with patch("sys.stdout", captured_output):
-            analyze_file("test.wav", mock_analyzer, args)
+            analyze_file_with_progress("test.wav", mock_analyzer, args)
 
         output = captured_output.getvalue()
 
@@ -126,7 +126,7 @@ class TestCLI(unittest.TestCase):
         self.assertIn("Error processing", output)
         self.assertIn("test.wav", output)
 
-    @patch("bpm_detector.cli.analyze_file")
+    @patch("bpm_detector.cli.analyze_file_with_progress")
     @patch("os.path.exists")
     def test_main_single_file(self, mock_exists, mock_analyze):
         """Test main function with single file."""
@@ -138,14 +138,25 @@ class TestCLI(unittest.TestCase):
             with patch("sys.stdout", io.StringIO()):
                 main()
 
-        # Should call analyze_file once
+        # Should call analyze_file_with_progress once
         self.assertEqual(mock_analyze.call_count, 1)
 
-    @patch("bpm_detector.cli.analyze_file")
+    @patch("bpm_detector.cli.SmartParallelAudioAnalyzer")
     @patch("os.path.exists")
-    def test_main_multiple_files(self, mock_exists, mock_analyze):
+    def test_main_multiple_files(self, mock_exists, mock_analyzer_class):
         """Test main function with multiple files."""
         mock_exists.return_value = True
+        
+        # Mock the analyzer instance
+        mock_analyzer = MagicMock()
+        mock_analyzer._parallel_config = MagicMock()
+        mock_analyzer._parallel_config.enable_parallel = True
+        mock_analyzer.analyze_file.return_value = {
+            "test1.wav": {"basic_info": {"filename": "test1.wav", "bpm": 120.0}},
+            "test2.wav": {"basic_info": {"filename": "test2.wav", "bpm": 130.0}},
+            "test3.wav": {"basic_info": {"filename": "test3.wav", "bpm": 140.0}}
+        }
+        mock_analyzer_class.return_value = mock_analyzer
 
         test_args = ["bpm-detector", "test1.wav", "test2.wav", "test3.wav"]
 
@@ -153,8 +164,10 @@ class TestCLI(unittest.TestCase):
             with patch("sys.stdout", io.StringIO()):
                 main()
 
-        # Should call analyze_file for each file
-        self.assertEqual(mock_analyze.call_count, 3)
+        # Should call analyze_file (either once for batch or multiple times for fallback)
+        self.assertGreater(mock_analyzer.analyze_file.call_count, 0)
+        # Verify that the analyzer was created
+        mock_analyzer_class.assert_called_once()
 
     @patch("os.path.exists")
     def test_main_missing_file(self, mock_exists):
@@ -179,7 +192,7 @@ class TestCLI(unittest.TestCase):
         test_args = [
             "bpm-detector",
             "--detect-key",
-            "--progress",
+            "--detailed-progress",
             "--sr",
             "44100",
             "--min_bpm",
@@ -190,20 +203,20 @@ class TestCLI(unittest.TestCase):
         ]
 
         with patch("sys.argv", test_args):
-            with patch("bpm_detector.cli.analyze_file") as mock_analyze:
+            with patch("bpm_detector.cli.analyze_file_with_progress") as mock_analyze:
                 with patch("os.path.exists", return_value=True):
                     with patch("sys.stdout", io.StringIO()):
                         main()
 
-        # Check that analyze_file was called
+        # Check that analyze_file_with_progress was called
         self.assertEqual(mock_analyze.call_count, 1)
 
-        # Check the args passed to analyze_file
+        # Check the args passed to analyze_file_with_progress
         call_args = mock_analyze.call_args[0]
         args = call_args[2]  # Third argument is the args object
 
         self.assertTrue(args.detect_key)
-        self.assertTrue(args.progress)
+        self.assertTrue(args.detailed_progress)
         self.assertEqual(args.sr, 44100)
         self.assertEqual(args.min_bpm, 60.0)
         self.assertEqual(args.max_bpm, 200.0)

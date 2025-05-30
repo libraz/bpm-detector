@@ -164,5 +164,82 @@ class TestChordProgressionAnalyzer(unittest.TestCase):
         self.assertGreater(confidence, 0.5)
 
 
+    def test_enhanced_chord_detection(self):
+        """Test enhanced chord detection features."""
+        # Create test audio with clear chord progression
+        duration = 8.0
+        sr = 22050
+        t = np.linspace(0, duration, int(sr * duration))
+        
+        # Create C-Am-F-G progression
+        chord_duration = duration / 4
+        audio = np.zeros_like(t)
+        
+        # C major
+        mask1 = t < chord_duration
+        audio[mask1] = (
+            np.sin(2 * np.pi * 261.63 * t[mask1]) +  # C
+            np.sin(2 * np.pi * 329.63 * t[mask1]) +  # E
+            np.sin(2 * np.pi * 392.00 * t[mask1])    # G
+        )
+        
+        results = self.analyzer.analyze(audio, sr, key='C Major', bpm=120.0)
+        
+        # Check enhanced features
+        self.assertIn('chord_changes', results)
+        self.assertIn('functional_analysis', results)
+        self.assertIn('modulations', results)
+        
+        # Check chord changes
+        chord_changes = results['chord_changes']
+        self.assertIsInstance(chord_changes, (int, float))
+        self.assertGreaterEqual(chord_changes, 0)
+
+    def test_chord_complexity_calculation(self):
+        """Test chord complexity calculation."""
+        # Test with different chord progressions
+        simple_chords = [('C', 0.8, 0, 100), ('F', 0.8, 100, 200), ('G', 0.8, 200, 300)]
+        
+        simple_analysis = self.analyzer.analyze_progression(simple_chords)
+        
+        # Should have complexity score
+        simple_complexity = simple_analysis.get('chord_complexity', 0)
+        self.assertIsInstance(simple_complexity, (int, float))
+        self.assertGreaterEqual(simple_complexity, 0.0)
+        self.assertLessEqual(simple_complexity, 1.0)
+
+    def test_substitute_chord_detection(self):
+        """Test substitute chord detection."""
+        # Test with chord progression that includes substitutes
+        chord_names = ['C', 'A7', 'Dm', 'G7']  # A7 is a substitute for Am
+        
+        substitute_ratio = self.analyzer._calculate_substitute_ratio(chord_names, 'C Major')
+        
+        self.assertIsInstance(substitute_ratio, (int, float))
+        self.assertGreaterEqual(substitute_ratio, 0.0)
+        self.assertLessEqual(substitute_ratio, 1.0)
+
+    def test_chord_clustering_and_merging(self):
+        """Test chord clustering and merging functionality."""
+        # Create chords with small gaps that should be merged
+        fragmented_chords = [
+            ('C', 0.9, 0, 90),
+            ('C', 0.8, 95, 190),   # Small gap, should merge
+            ('Am', 0.85, 200, 290),
+            ('Am', 0.8, 295, 390)  # Small gap, should merge
+        ]
+        
+        merged_chords = self.analyzer._merge_consecutive_chords(fragmented_chords)
+        
+        # Should have fewer chords after merging
+        self.assertLessEqual(len(merged_chords), len(fragmented_chords))
+        
+        # Check that merged chords have reasonable durations
+        for chord, confidence, start, end in merged_chords:
+            self.assertLess(start, end)
+            self.assertGreaterEqual(confidence, 0.0)
+            self.assertLessEqual(confidence, 1.0)
+
+
 if __name__ == '__main__':
     unittest.main()
