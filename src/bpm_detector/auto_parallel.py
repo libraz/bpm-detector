@@ -1,12 +1,13 @@
 """Automatic parallel configuration and system monitoring module."""
 
-import time
 import threading
-import psutil
-from multiprocessing import cpu_count
-from typing import Dict, Any, Optional
+import time
 from dataclasses import dataclass
 from enum import Enum
+from multiprocessing import cpu_count
+from typing import Any, Dict, Optional
+
+import psutil
 
 
 class ParallelStrategy(Enum):

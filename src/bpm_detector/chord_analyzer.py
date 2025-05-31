@@ -1,8 +1,9 @@
 """Chord progression analysis module."""
 
-import numpy as np
+from typing import Any, Dict, List, Tuple
+
 import librosa
-from typing import List, Tuple, Dict, Any
+import numpy as np
 
 from .music_theory import NOTE_NAMES
 
@@ -104,17 +105,9 @@ class ChordProgressionAnalyzer:
         y_harmonic, _ = librosa.effects.hpss(y_filtered, margin=3.0)
 
         # Use STFT-based chroma with larger FFT for tension chord detection
-        stft = librosa.stft(
-            y_harmonic,
-            hop_length=self.hop_length,
-            n_fft=self.n_fft,
-        )
+        stft = librosa.stft(y_harmonic, hop_length=self.hop_length, n_fft=self.n_fft)
         chroma = librosa.feature.chroma_stft(
-            S=np.abs(stft),
-            sr=sr,
-            hop_length=self.hop_length,
-            n_chroma=12,
-            norm=2,
+            S=np.abs(stft), sr=sr, hop_length=self.hop_length, n_chroma=12, norm=2
         )
 
         # Apply 2-second moving window average for stability

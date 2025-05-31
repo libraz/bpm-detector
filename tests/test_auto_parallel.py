@@ -1,11 +1,15 @@
 """Tests for auto parallel module."""
 
-import unittest
 import time
-from unittest.mock import patch, MagicMock
+import unittest
+from unittest.mock import MagicMock, patch
+
 from src.bpm_detector.auto_parallel import (
-    ParallelStrategy, ParallelConfig, AutoParallelConfig,
-    SystemMonitor, PerformanceProfiler
+    AutoParallelConfig,
+    ParallelConfig,
+    ParallelStrategy,
+    PerformanceProfiler,
+    SystemMonitor,
 )
 
 
@@ -24,11 +28,9 @@ class TestParallelConfig(unittest.TestCase):
     def test_parallel_config_creation(self):
         """Test parallel config creation."""
         config = ParallelConfig(
-            enable_parallel=True,
-            max_workers=4,
-            strategy=ParallelStrategy.THREAD_POOL
+            enable_parallel=True, max_workers=4, strategy=ParallelStrategy.THREAD_POOL
         )
-        
+
         self.assertTrue(config.enable_parallel)
         self.assertEqual(config.max_workers, 4)
         self.assertEqual(config.strategy, ParallelStrategy.THREAD_POOL)
@@ -36,7 +38,7 @@ class TestParallelConfig(unittest.TestCase):
     def test_parallel_config_defaults(self):
         """Test parallel config with defaults."""
         config = ParallelConfig()
-        
+
         # Should have reasonable defaults
         self.assertIsInstance(config.enable_parallel, bool)
         self.assertIsInstance(config.max_workers, int)
@@ -55,9 +57,9 @@ class TestAutoParallelConfig(unittest.TestCase):
         mock_psutil.virtual_memory.return_value.available = 16 * 1024**3  # 16GB
         mock_psutil.cpu_percent.return_value = 20.0  # Low CPU usage
         mock_psutil.virtual_memory.return_value.percent = 30.0  # Low memory usage
-        
+
         config = AutoParallelConfig.get_optimal_config()
-        
+
         # Should enable parallel processing
         self.assertTrue(config.enable_parallel)
         self.assertGreater(config.max_workers, 1)
@@ -73,9 +75,9 @@ class TestAutoParallelConfig(unittest.TestCase):
         mock_psutil.virtual_memory.return_value.available = 1 * 1024**3  # 1GB
         mock_psutil.cpu_percent.return_value = 80.0  # High CPU usage
         mock_psutil.virtual_memory.return_value.percent = 85.0  # High memory usage
-        
+
         config = AutoParallelConfig.get_optimal_config()
-        
+
         # Should be conservative or disable parallel processing
         if config.enable_parallel:
             self.assertLessEqual(config.max_workers, 2)
@@ -91,9 +93,9 @@ class TestAutoParallelConfig(unittest.TestCase):
         mock_psutil.virtual_memory.return_value.available = 2 * 1024**3  # 2GB
         mock_psutil.cpu_percent.return_value = 50.0
         mock_psutil.virtual_memory.return_value.percent = 60.0
-        
+
         config = AutoParallelConfig.get_optimal_config()
-        
+
         # Should disable parallel processing for single core
         self.assertFalse(config.enable_parallel)
         self.assertEqual(config.max_workers, 1)
@@ -101,19 +103,17 @@ class TestAutoParallelConfig(unittest.TestCase):
     def test_get_file_count_adjustment(self):
         """Test file count adjustment."""
         base_config = ParallelConfig(
-            enable_parallel=True,
-            max_workers=4,
-            strategy=ParallelStrategy.THREAD_POOL
+            enable_parallel=True, max_workers=4, strategy=ParallelStrategy.THREAD_POOL
         )
-        
+
         # Test with small file count
         small_adjusted = AutoParallelConfig.get_file_count_adjustment(2, base_config)
         self.assertLessEqual(small_adjusted.max_workers, base_config.max_workers)
-        
+
         # Test with large file count
         large_adjusted = AutoParallelConfig.get_file_count_adjustment(20, base_config)
         self.assertGreaterEqual(large_adjusted.max_workers, 1)
-        
+
         # Test with single file
         single_adjusted = AutoParallelConfig.get_file_count_adjustment(1, base_config)
         self.assertEqual(single_adjusted.max_workers, 1)
@@ -124,10 +124,10 @@ class TestAutoParallelConfig(unittest.TestCase):
         # Mock psutil to raise an exception
         mock_psutil.virtual_memory.side_effect = Exception("psutil error")
         mock_psutil.cpu_percent.side_effect = Exception("psutil error")
-        
+
         # Should handle errors gracefully and return safe defaults
         config = AutoParallelConfig.get_optimal_config()
-        
+
         self.assertIsInstance(config, ParallelConfig)
         self.assertIsInstance(config.enable_parallel, bool)
         self.assertIsInstance(config.max_workers, int)
@@ -158,7 +158,7 @@ class TestSystemMonitor(unittest.TestCase):
         self.monitor.start_monitoring()
         self.assertTrue(self.monitor._monitoring)
         self.assertIsNotNone(self.monitor._monitor_thread)
-        
+
         # Stop monitoring
         self.monitor.stop_monitoring()
         self.assertFalse(self.monitor._monitoring)
@@ -169,9 +169,9 @@ class TestSystemMonitor(unittest.TestCase):
         # Mock high system load
         mock_psutil.cpu_percent.return_value = 90.0
         mock_psutil.virtual_memory.return_value.percent = 85.0
-        
+
         should_reduce = self.monitor.should_reduce_parallelism()
-        
+
         # Should recommend reduction for high load
         self.assertIsInstance(should_reduce, bool)
 
@@ -181,9 +181,9 @@ class TestSystemMonitor(unittest.TestCase):
         # Mock moderate system load
         mock_psutil.cpu_percent.return_value = 50.0
         mock_psutil.virtual_memory.return_value.percent = 60.0
-        
+
         recommended = self.monitor.get_recommended_workers(4)
-        
+
         # Should return reasonable worker count
         self.assertIsInstance(recommended, int)
         self.assertGreater(recommended, 0)
@@ -193,14 +193,14 @@ class TestSystemMonitor(unittest.TestCase):
         """Test monitor thread safety."""
         # Start monitoring
         self.monitor.start_monitoring()
-        
+
         # Should be able to call methods safely
         should_reduce = self.monitor.should_reduce_parallelism()
         recommended = self.monitor.get_recommended_workers(2)
-        
+
         self.assertIsInstance(should_reduce, bool)
         self.assertIsInstance(recommended, int)
-        
+
         # Stop monitoring
         self.monitor.stop_monitoring()
 
@@ -209,9 +209,9 @@ class TestSystemMonitor(unittest.TestCase):
         for _ in range(3):
             self.monitor.start_monitoring()
             self.assertTrue(self.monitor._monitoring)
-            
+
             time.sleep(0.05)  # Brief monitoring period
-            
+
             self.monitor.stop_monitoring()
             self.assertFalse(self.monitor._monitoring)
 
@@ -232,25 +232,25 @@ class TestPerformanceProfiler(unittest.TestCase):
         """Test profiling lifecycle."""
         # Start profiling
         profile_data = self.profiler.start_profiling("test_task")
-        
+
         # Check profile data structure
         self.assertIsInstance(profile_data, dict)
         self.assertIn('task_name', profile_data)
         self.assertIn('start_time', profile_data)
         self.assertIn('start_memory', profile_data)
         self.assertEqual(profile_data['task_name'], "test_task")
-        
+
         # Simulate some work
         time.sleep(0.01)
-        
+
         # End profiling
         self.profiler.end_profiling(profile_data)
-        
+
         # Check that profile was recorded
         self.assertIn("test_task", self.profiler.profiles)
         task_profiles = self.profiler.profiles["test_task"]
         self.assertGreater(len(task_profiles), 0)
-        
+
         # Check profile structure
         profile = task_profiles[0]
         self.assertIn('duration', profile)
@@ -264,18 +264,18 @@ class TestPerformanceProfiler(unittest.TestCase):
             profile_data = self.profiler.start_profiling(f"task_{i}")
             time.sleep(0.01)
             self.profiler.end_profiling(profile_data)
-        
+
         summary = self.profiler.get_performance_summary()
-        
+
         # Check summary structure
         self.assertIsInstance(summary, dict)
         self.assertIn('total_tasks', summary)
         self.assertIn('task_summaries', summary)
-        
+
         # Check task summaries
         task_summaries = summary['task_summaries']
         self.assertIsInstance(task_summaries, dict)
-        
+
         for task_name, task_summary in task_summaries.items():
             self.assertIn('count', task_summary)
             self.assertIn('avg_duration', task_summary)
@@ -289,9 +289,9 @@ class TestPerformanceProfiler(unittest.TestCase):
             profile_data = self.profiler.start_profiling("slow_task")
             time.sleep(0.02)  # Simulate slow task
             self.profiler.end_profiling(profile_data)
-        
+
         adjustment = self.profiler.should_adjust_parallelism("slow_task")
-        
+
         # Should return recommendation or None
         if adjustment is not None:
             self.assertIsInstance(adjustment, str)
@@ -300,22 +300,22 @@ class TestPerformanceProfiler(unittest.TestCase):
     def test_multiple_tasks_profiling(self):
         """Test profiling multiple different tasks."""
         tasks = ["task_a", "task_b", "task_c"]
-        
+
         for task in tasks:
             for _ in range(2):
                 profile_data = self.profiler.start_profiling(task)
                 time.sleep(0.005)
                 self.profiler.end_profiling(profile_data)
-        
+
         # Check all tasks were recorded
         for task in tasks:
             self.assertIn(task, self.profiler.profiles)
             self.assertEqual(len(self.profiler.profiles[task]), 2)
-        
+
         # Check summary includes all tasks
         summary = self.profiler.get_performance_summary()
         self.assertEqual(summary['total_tasks'], len(tasks))
-        
+
         for task in tasks:
             self.assertIn(task, summary['task_summaries'])
 
@@ -323,7 +323,7 @@ class TestPerformanceProfiler(unittest.TestCase):
         """Test profiling with errors."""
         # Test with invalid profile data
         invalid_profile = {'invalid': 'data'}
-        
+
         try:
             self.profiler.end_profiling(invalid_profile)
             # Should handle gracefully
@@ -334,7 +334,7 @@ class TestPerformanceProfiler(unittest.TestCase):
     def test_empty_profiler_summary(self):
         """Test summary generation with no profiles."""
         summary = self.profiler.get_performance_summary()
-        
+
         # Should handle empty state gracefully
         self.assertIsInstance(summary, dict)
         self.assertEqual(summary['total_tasks'], 0)
@@ -348,18 +348,18 @@ class TestPerformanceProfiler(unittest.TestCase):
         mock_memory = MagicMock()
         mock_memory.available = 8 * 1024**3  # 8GB
         mock_psutil.virtual_memory.return_value = mock_memory
-        
+
         profile_data = self.profiler.start_profiling("memory_test")
-        
+
         # Change mock memory to simulate usage
         mock_memory.available = 7 * 1024**3  # 7GB (1GB used)
-        
+
         self.profiler.end_profiling(profile_data)
-        
+
         # Check memory delta was recorded
         profiles = self.profiler.profiles["memory_test"]
         self.assertGreater(len(profiles), 0)
-        
+
         profile = profiles[0]
         self.assertIn('memory_delta', profile)
 
@@ -368,13 +368,13 @@ class TestPerformanceProfiler(unittest.TestCase):
         # Start multiple profiles for same task
         profile1 = self.profiler.start_profiling("concurrent_task")
         profile2 = self.profiler.start_profiling("concurrent_task")
-        
+
         time.sleep(0.01)
-        
+
         # End both profiles
         self.profiler.end_profiling(profile1)
         self.profiler.end_profiling(profile2)
-        
+
         # Should record both profiles
         profiles = self.profiler.profiles["concurrent_task"]
         self.assertEqual(len(profiles), 2)

@@ -1,17 +1,18 @@
 """Parallel audio analyzer with progress tracking and auto-optimization."""
 
-import numpy as np
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
-from typing import Dict, Any, List, Union, Optional, Callable
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from typing import Any, Callable, Dict, List, Optional, Union
 
-from .music_analyzer import AudioAnalyzer
+import numpy as np
+
 from .auto_parallel import (
     AutoParallelConfig,
-    SystemMonitor,
-    PerformanceProfiler,
     ParallelConfig,
+    PerformanceProfiler,
+    SystemMonitor,
 )
-from .progress_manager import ProgressManager, ProgressCallback
+from .music_analyzer import AudioAnalyzer
+from .progress_manager import ProgressCallback, ProgressManager
 
 
 class SmartParallelAudioAnalyzer(AudioAnalyzer):

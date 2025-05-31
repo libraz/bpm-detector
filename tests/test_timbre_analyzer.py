@@ -1,7 +1,9 @@
 """Tests for timbre analyzer module."""
 
 import unittest
+
 import numpy as np
+
 from src.bpm_detector.timbre_analyzer import TimbreAnalyzer
 
 

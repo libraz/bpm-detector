@@ -1,7 +1,8 @@
 """Context analysis module for section classification."""
 
+from typing import Any, Dict, List
+
 import numpy as np
-from typing import Dict, Any, List
 
 
 class ContextAnalyzer:

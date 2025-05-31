@@ -146,7 +146,7 @@ class TestCLI(unittest.TestCase):
     def test_main_multiple_files(self, mock_exists, mock_analyzer_class):
         """Test main function with multiple files."""
         mock_exists.return_value = True
-        
+
         # Mock the analyzer instance
         mock_analyzer = MagicMock()
         mock_analyzer._parallel_config = MagicMock()
@@ -154,7 +154,7 @@ class TestCLI(unittest.TestCase):
         mock_analyzer.analyze_file.return_value = {
             "test1.wav": {"basic_info": {"filename": "test1.wav", "bpm": 120.0}},
             "test2.wav": {"basic_info": {"filename": "test2.wav", "bpm": 130.0}},
-            "test3.wav": {"basic_info": {"filename": "test3.wav", "bpm": 140.0}}
+            "test3.wav": {"basic_info": {"filename": "test3.wav", "bpm": 140.0}},
         }
         mock_analyzer_class.return_value = mock_analyzer
 
@@ -220,7 +220,6 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(args.sr, 44100)
         self.assertEqual(args.min_bpm, 60.0)
         self.assertEqual(args.max_bpm, 200.0)
-
 
     @patch("bpm_detector.cli.analyze_file_with_progress")
     @patch("os.path.exists")

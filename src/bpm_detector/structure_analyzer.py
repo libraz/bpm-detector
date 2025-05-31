@@ -1,7 +1,8 @@
 """Musical structure analysis module - Main coordinator."""
 
+from typing import Any, Dict, List
+
 import numpy as np
-from typing import List, Dict, Any
 
 from .boundary_detector import BoundaryDetector
 from .section_classifier import SectionClassifier

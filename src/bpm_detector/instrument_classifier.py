@@ -1,8 +1,9 @@
 """Instrument classification module."""
 
-import numpy as np
+from typing import Any, Dict, List
+
 import librosa
-from typing import List, Dict, Any
+import numpy as np
 
 
 class InstrumentClassifier:

@@ -1,7 +1,8 @@
 """Section post-processing module for musical structure analysis."""
 
+from typing import Any, Dict, List
+
 import numpy as np
-from typing import List, Dict, Any
 
 from .jpop_structure_optimizer import JPopStructureOptimizer
 from .section_analyzer import SectionAnalyzer

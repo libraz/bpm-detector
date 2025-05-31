@@ -1,7 +1,9 @@
 """Tests for structure analyzer."""
 
 import unittest
+
 import numpy as np
+
 from src.bpm_detector.structure_analyzer import StructureAnalyzer
 
 

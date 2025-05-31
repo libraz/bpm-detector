@@ -1,8 +1,10 @@
 import unittest
+
 import numpy as np
-from src.bpm_detector.key_detector import KeyDetector
+
 from src.bpm_detector.chord_analyzer import ChordProgressionAnalyzer
 from src.bpm_detector.jpop_structure_optimizer import JPopStructureOptimizer
+from src.bpm_detector.key_detector import KeyDetector
 
 
 class TestYoruNiKakeruFixes(unittest.TestCase):
@@ -22,10 +24,15 @@ class TestYoruNiKakeruFixes(unittest.TestCase):
 
     def test_label_drop_chorus(self):
         optimizer = JPopStructureOptimizer()
-        sections = [{
-            'type': 'chorus', 'start_time': 0.0, 'end_time': 4.0, 'duration': 4.0,
-            'ascii_label': 'Sabi'
-        }]
+        sections = [
+            {
+                'type': 'chorus',
+                'start_time': 0.0,
+                'end_time': 4.0,
+                'duration': 4.0,
+                'ascii_label': 'Sabi',
+            }
+        ]
         y = np.zeros(22050 * 4)
         mods = [{'time': 1.0, 'from_key': 'C', 'to_key': 'F Major', 'confidence': 0.9}]
         result = optimizer.label_special_chorus_sections(sections, y, 22050, mods)

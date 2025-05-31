@@ -1,8 +1,9 @@
 """Dynamics and energy analysis module."""
 
-import numpy as np
+from typing import Any, Dict, List
+
 import librosa
-from typing import List, Dict, Any
+import numpy as np
 from scipy.signal import find_peaks, savgol_filter
 from scipy.stats import entropy
 
