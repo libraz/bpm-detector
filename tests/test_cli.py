@@ -222,5 +222,26 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(args.max_bpm, 200.0)
 
 
+    @patch("bpm_detector.cli.analyze_file_with_progress")
+    @patch("os.path.exists")
+    def test_main_quiet_option(self, mock_exists, mock_analyze):
+        """Test that --quiet disables progress display."""
+        mock_exists.return_value = True
+
+        test_args = ["bpm-detector", "--quiet", "test.wav"]
+
+        with patch("sys.argv", test_args):
+            with patch("sys.stdout", io.StringIO()):
+                main()
+
+        # Should call analyze_file_with_progress once
+        mock_analyze.assert_called_once()
+
+        # Args should have progress disabled
+        call_args = mock_analyze.call_args[0]
+        args = call_args[2]
+        self.assertFalse(args.progress)
+
+
 if __name__ == "__main__":
     unittest.main()
