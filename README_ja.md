@@ -144,7 +144,7 @@ rye sync
 bpm-detector your_audio_file.wav
 
 # キー検出も含める場合
-bmp-detector --detect-key your_audio_file.wav
+bpm-detector --detect-key your_audio_file.wav
 
 # 複数ファイルの処理
 bpm-detector --detect-key *.wav *.mp3
