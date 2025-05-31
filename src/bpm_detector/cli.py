@@ -321,8 +321,13 @@ def analyze_file_with_progress(path: str, analyzer, args: argparse.Namespace) ->
         bar = progress_bar(info.frames, args.sr) if args.progress else None
 
         def progress_callback(increment: int) -> None:
+            """Update progress bar to reflect absolute progress percentage."""
             if bar:
-                bar.update(increment)
+                # ``increment`` represents the current percentage completed,
+                # so set ``bar.n`` directly and refresh to synchronize the
+                # visual bar with the provided value.
+                bar.n = increment
+                bar.refresh()
 
         try:
             results = analyzer.analyze_file(
