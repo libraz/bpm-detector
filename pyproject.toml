@@ -87,3 +87,8 @@ filterwarnings = [
     "ignore:overflow encountered.*:RuntimeWarning",
     "ignore:invalid value encountered.*:RuntimeWarning",
 ]
+
+[tool.black]
+skip-string-normalization = true
+skip-magic-trailing-comma = true
+
