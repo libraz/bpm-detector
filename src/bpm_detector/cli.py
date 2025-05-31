@@ -33,7 +33,7 @@ interrupted = False
 
 def signal_handler(signum, frame):
     """Handle Ctrl+C gracefully."""
-    global interrupted, current_analyzer
+    global interrupted
     interrupted = True
     
     print(f"\n{Fore.YELLOW}⚠️  Interrupted by user. Cleaning up...{Style.RESET_ALL}")
@@ -277,9 +277,8 @@ def analyze_file_with_progress(path: str, analyzer, args: argparse.Namespace) ->
         progress_display = None
         if args.progress:
             progress_display = create_progress_display(detailed=args.detailed_progress)
-        
+
         def smart_progress_callback(progress: float, message: str = ""):
-            global interrupted
             if interrupted:
                 raise KeyboardInterrupt("Analysis interrupted by user")
             
@@ -441,7 +440,6 @@ def main() -> None:
         if hasattr(analyzer, 'analyze_file') and hasattr(analyzer, '_parallel_config'):
             try:
                 def multi_progress_callback(progress: float, message: str = ""):
-                    global interrupted
                     if interrupted:
                         raise KeyboardInterrupt("Analysis interrupted by user")
                     
