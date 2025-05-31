@@ -1,9 +1,11 @@
 """Key validation and specialized detection for key detection."""
 
-import numpy as np
 from typing import List, Tuple
-from .music_theory import NOTE_NAMES
+
+import numpy as np
+
 from .key_profiles import _Constants
+from .music_theory import NOTE_NAMES
 
 
 class KeyValidator:

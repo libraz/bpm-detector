@@ -5,15 +5,16 @@ import os
 import signal
 import sys
 import warnings
-import psutil
 from multiprocessing import cpu_count
 
+import psutil
 import soundfile as sf
 from colorama import Fore, Style, init
 from tqdm import tqdm
+
+from .auto_parallel import AutoParallelConfig
 from .music_analyzer import HOP_DEFAULT, SR_DEFAULT, AudioAnalyzer
 from .parallel_analyzer import SmartParallelAudioAnalyzer
-from .auto_parallel import AutoParallelConfig
 from .progress_manager import create_progress_display
 
 # Suppress sklearn warnings

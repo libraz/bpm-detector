@@ -1,7 +1,9 @@
 """Chord progression analysis for key detection."""
 
-import numpy as np
 from typing import Tuple
+
+import numpy as np
+
 from .music_theory import NOTE_NAMES
 
 

@@ -1,8 +1,10 @@
 """Tests for melody harmony analyzer module."""
 
 import unittest
-import numpy as np
 from unittest.mock import patch
+
+import numpy as np
+
 from src.bpm_detector.melody_harmony_analyzer import MelodyHarmonyAnalyzer
 
 

@@ -1,19 +1,20 @@
 """Tests for parallel analyzer functionality."""
 
-import unittest
-import tempfile
 import os
 import shutil
-import numpy as np
-import soundfile as sf
+import tempfile
+import unittest
 from unittest.mock import patch
 
-from src.bpm_detector.parallel_analyzer import SmartParallelAudioAnalyzer
+import numpy as np
+import soundfile as sf
+
 from src.bpm_detector.auto_parallel import (
     AutoParallelConfig,
-    SystemMonitor,
     ParallelConfig,
+    SystemMonitor,
 )
+from src.bpm_detector.parallel_analyzer import SmartParallelAudioAnalyzer
 from src.bpm_detector.progress_manager import ProgressManager, TaskStatus
 
 
@@ -373,7 +374,6 @@ class TestAdvancedParallelFeatures(unittest.TestCase):
         from src.bpm_detector.auto_parallel import AutoParallelConfig
 
         # Test with different file counts
-
         # Create multiple test files
         large_batch = []
         for i in range(5):
@@ -490,8 +490,8 @@ class TestAdvancedParallelFeatures(unittest.TestCase):
     def test_detailed_progress_tracking(self):
         """Test detailed progress tracking functionality."""
         from src.bpm_detector.progress_manager import (
-            ProgressManager,
             DetailedProgressDisplay,
+            ProgressManager,
         )
 
         progress_manager = ProgressManager()

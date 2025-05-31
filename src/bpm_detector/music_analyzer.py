@@ -11,12 +11,12 @@ from tqdm import tqdm
 
 # Import new analyzers
 from .chord_analyzer import ChordProgressionAnalyzer
-from .structure_analyzer import StructureAnalyzer
-from .rhythm_analyzer import RhythmAnalyzer
-from .timbre_analyzer import TimbreAnalyzer
-from .melody_harmony_analyzer import MelodyHarmonyAnalyzer
 from .dynamics_analyzer import DynamicsAnalyzer
+from .melody_harmony_analyzer import MelodyHarmonyAnalyzer
+from .rhythm_analyzer import RhythmAnalyzer
 from .similarity_engine import SimilarityEngine
+from .structure_analyzer import StructureAnalyzer
+from .timbre_analyzer import TimbreAnalyzer
 
 # --- Configuration constants ---
 SR_DEFAULT = 22_050
@@ -109,7 +109,7 @@ class BPMDetector:
 
         # Optimize for speed: use smaller hop_length for faster processing
         optimized_hop = min(self.hop_length, 512)
-        
+
         # Limit audio length for very long files to improve speed
         max_duration = 180  # 3 minutes max for BPM detection
         if len(y) > max_duration * sr:
@@ -173,7 +173,7 @@ class KeyDetector:
             sr=sr,
             hop_length=self.hop_length,
             n_fft=2048,  # Smaller FFT for speed
-            n_chroma=12
+            n_chroma=12,
         )
 
         # Take average over time axis
@@ -215,11 +215,11 @@ class AudioAnalyzer:
     def __init__(self, sr: int = SR_DEFAULT, hop_length: int = HOP_DEFAULT):
         self.sr = sr
         self.hop_length = hop_length
-        
+
         # Original detectors
         self.bpm_detector = BPMDetector(sr, hop_length)
         self.key_detector = KeyDetector(hop_length)
-        
+
         # New analyzers
         self.chord_analyzer = ChordProgressionAnalyzer(hop_length)
         self.structure_analyzer = StructureAnalyzer(hop_length)
@@ -228,15 +228,15 @@ class AudioAnalyzer:
         self.melody_harmony_analyzer = MelodyHarmonyAnalyzer(hop_length)
         self.dynamics_analyzer = DynamicsAnalyzer(hop_length)
         self.similarity_engine = SimilarityEngine()
-        
+
         # Feature cache for efficiency
         self._feature_cache = {}
         self._cache_enabled = True
-    
+
     def clear_cache(self):
         """Clear feature cache to free memory."""
         self._feature_cache.clear()
-    
+
     def _get_cached_features(self, cache_key: str, compute_func, *args, **kwargs):
         """Get cached features or compute and cache them."""
         if not self._cache_enabled or cache_key not in self._feature_cache:
@@ -276,13 +276,13 @@ class AudioAnalyzer:
             sr=self.sr,
             mono=True,
             dtype=np.float32,  # Use float32 for better memory efficiency
-            res_type='kaiser_fast'  # Faster resampling
+            res_type='kaiser_fast',  # Faster resampling
         )
         sr = int(sr_loaded)  # Ensure sr is int for type checking
-        
+
         total_steps = 9 if comprehensive else 3
         current_step = 0
-        
+
         def update_progress():
             nonlocal current_step
             current_step += 1
@@ -291,7 +291,7 @@ class AudioAnalyzer:
 
         # Basic info
         duration = len(y) / sr
-        
+
         # BPM detection
         bpm, bpm_conf, top_bpms, top_hits = self.bpm_detector.detect(
             y, sr, min_bpm, max_bpm, start_bpm
@@ -304,7 +304,9 @@ class AudioAnalyzer:
         key_detection_result = None
         if detect_key:
             # Use the improved key detection from melody_harmony_analyzer with C minor hint
-            key_detection_result = self.melody_harmony_analyzer.detect_key(y, sr, external_key_hint="Cm")
+            key_detection_result = self.melody_harmony_analyzer.detect_key(
+                y, sr, external_key_hint="Cm"
+            )
             if key_detection_result['key'] != 'None':
                 key = f"{key_detection_result['key']} {key_detection_result['mode']}"
                 key_conf = key_detection_result['confidence'] * 100
@@ -321,16 +323,14 @@ class AudioAnalyzer:
             "bpm_confidence": bpm_conf,
             "bpm_candidates": list(zip(top_bpms, top_hits)),
             "key": key,
-            "key_confidence": key_conf
+            "key_confidence": key_conf,
         }
-        
+
         # Add detailed key detection results if available
         if key_detection_result:
             basic_info["key_detection_details"] = key_detection_result
-        
-        results = {
-            "basic_info": basic_info
-        }
+
+        results = {"basic_info": basic_info}
 
         if not comprehensive:
             update_progress()
@@ -372,15 +372,15 @@ class AudioAnalyzer:
             feature_vector = self.similarity_engine.extract_feature_vector(results)
             results["similarity_features"] = {
                 "feature_vector": feature_vector.tolist(),
-                "feature_weights": self.similarity_engine.feature_weights
+                "feature_weights": self.similarity_engine.feature_weights,
             }
-            
+
             # Generate reference tags
             results["reference_tags"] = self._generate_reference_tags(results)
-            
+
             # Generate production notes
             results["production_notes"] = self._generate_production_notes(results)
-            
+
             update_progress()
 
         except Exception as e:
@@ -392,26 +392,27 @@ class AudioAnalyzer:
                 self.clear_cache()
             # Force garbage collection for large audio files
             import gc
+
             gc.collect()
 
         return results
-    
+
     def _generate_reference_tags(self, results: Dict[str, Any]) -> List[str]:
         """Generate reference tags for the track.
-        
+
         Args:
             results: Analysis results
-            
+
         Returns:
             List of reference tags
         """
         tags = []
-        
+
         # Basic info tags
         basic_info = results.get("basic_info", {})
         bpm = basic_info.get("bpm", 120)
         key = basic_info.get("key", "")
-        
+
         # Tempo tags
         if bpm < 80:
             tags.append("slow-tempo")
@@ -421,28 +422,28 @@ class AudioAnalyzer:
             tags.append("upbeat")
         else:
             tags.append("fast-tempo")
-        
+
         # Key tags
         if key:
             if "Major" in key:
                 tags.append("major-key")
             elif "Minor" in key:
                 tags.append("minor-key")
-        
+
         # Rhythm tags
         rhythm = results.get("rhythm", {})
         time_sig = rhythm.get("time_signature", "4/4")
         if time_sig != "4/4":
             tags.append(f"time-sig-{time_sig.replace('/', '-')}")
-        
+
         groove = rhythm.get("groove_type", "straight")
         if groove != "straight":
             tags.append(groove)
-        
+
         syncopation = rhythm.get("syncopation_level", 0.0)
         if syncopation > 0.5:
             tags.append("syncopated")
-        
+
         # Structure tags
         structure = results.get("structure", {})
         complexity = structure.get("structural_complexity", 0.0)
@@ -450,22 +451,22 @@ class AudioAnalyzer:
             tags.append("complex-structure")
         elif complexity < 0.3:
             tags.append("simple-structure")
-        
+
         # Timbre tags
         timbre = results.get("timbre", {})
         instruments = timbre.get("dominant_instruments", [])
-        
+
         for instrument in instruments[:3]:  # Top 3 instruments
             inst_name = instrument.get("instrument", "")
             if inst_name:
                 tags.append(f"{inst_name}-driven")
-        
+
         brightness = timbre.get("brightness", 0.0)
         if brightness > 0.7:
             tags.append("bright")
         elif brightness < 0.3:
             tags.append("dark")
-        
+
         # Energy tags
         dynamics = results.get("dynamics", {})
         energy = dynamics.get("overall_energy", 0.0)
@@ -473,35 +474,35 @@ class AudioAnalyzer:
             tags.append("high-energy")
         elif energy < 0.3:
             tags.append("low-energy")
-        
+
         return tags
-    
+
     def _generate_production_notes(self, results: Dict[str, Any]) -> Dict[str, Any]:
         """Generate production notes for the track.
-        
+
         Args:
             results: Analysis results
-            
+
         Returns:
             Dictionary of production notes
         """
         notes = {}
-        
+
         # Arrangement density
         timbre = results.get("timbre", {})
         density = timbre.get("density", 0.0)
-        
+
         if density > 0.7:
             notes["arrangement_density"] = "dense"
         elif density > 0.4:
             notes["arrangement_density"] = "medium"
         else:
             notes["arrangement_density"] = "sparse"
-        
+
         # Production style inference
         instruments = timbre.get("dominant_instruments", [])
         inst_names = [inst.get("instrument", "") for inst in instruments]
-        
+
         if "guitar" in inst_names and "drums" in inst_names:
             if "piano" in inst_names:
                 notes["production_style"] = "rock_pop"
@@ -511,34 +512,34 @@ class AudioAnalyzer:
             notes["production_style"] = "piano_driven"
         else:
             notes["production_style"] = "modern_pop"
-        
+
         # Mix characteristics
         mix_chars = []
-        
+
         dynamics = results.get("dynamics", {})
         dynamic_range = dynamics.get("dynamic_range", {}).get("dynamic_range_db", 0)
-        
+
         if dynamic_range > 20:
             mix_chars.append("wide_dynamic_range")
         elif dynamic_range < 10:
             mix_chars.append("compressed")
-        
+
         brightness = timbre.get("brightness", 0.0)
         if brightness > 0.7:
             mix_chars.append("bright_mix")
         elif brightness < 0.3:
             mix_chars.append("warm_mix")
-        
+
         notes["mix_characteristics"] = mix_chars
-        
+
         return notes
-    
+
     def generate_reference_sheet(self, results: Dict[str, Any]) -> str:
         """Generate a formatted reference sheet for music production.
-        
+
         Args:
             results: Complete analysis results
-            
+
         Returns:
             Formatted reference sheet as markdown string
         """
@@ -549,7 +550,7 @@ class AudioAnalyzer:
         timbre = results.get("timbre", {})
         melody_harmony = results.get("melody_harmony", {})
         dynamics = results.get("dynamics", {})
-        
+
         sheet = f"""# Music Production Reference Sheet
 
 ## Basic Information
@@ -594,28 +595,28 @@ class AudioAnalyzer:
 ## Reference Tags
 {', '.join(results.get('reference_tags', []))}
 """
-        
+
         return sheet
-    
+
     def _format_production_notes(self, notes: Dict[str, Any]) -> str:
         """Format production notes for display.
-        
+
         Args:
             notes: Production notes dictionary
-            
+
         Returns:
             Formatted notes string
         """
         formatted = []
-        
+
         density = notes.get("arrangement_density", "medium")
         formatted.append(f"- Arrangement Density: {density}")
-        
+
         style = notes.get("production_style", "modern_pop")
         formatted.append(f"- Production Style: {style}")
-        
+
         mix_chars = notes.get("mix_characteristics", [])
         if mix_chars:
             formatted.append(f"- Mix Characteristics: {', '.join(mix_chars)}")
-        
+
         return '\n'.join(formatted)

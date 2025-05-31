@@ -1,10 +1,12 @@
 """Tests for the integrated music analyzer."""
 
+import os
+import tempfile
 import unittest
+
 import numpy as np
 import soundfile as sf
-import tempfile
-import os
+
 from src.bpm_detector.music_analyzer import AudioAnalyzer
 
 

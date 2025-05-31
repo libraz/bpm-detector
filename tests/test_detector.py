@@ -179,7 +179,9 @@ class TestAudioAnalyzer(unittest.TestCase):
             # Key detection result may vary due to actual implementation
             self.assertIsInstance(basic_info["key"], str)
             self.assertIsInstance(basic_info["key_confidence"], (int, float))
-            self.assertTrue("Major" in basic_info["key"] or "Minor" in basic_info["key"])
+            self.assertTrue(
+                "Major" in basic_info["key"] or "Minor" in basic_info["key"]
+            )
         else:
             # Fallback to old structure
             self.assertIn("filename", results)
