@@ -114,6 +114,8 @@ git checkout -b feature/your-feature-name
 git checkout -b fix/issue-description
 ```
 
+Use short, descriptive branch names in **English** (e.g., `feature/tempo-estimation`).
+
 ### 2. Development Guidelines
 
 #### For Core Analysis Features
@@ -245,16 +247,16 @@ python -m cProfile -s cumulative your_script.py
 
 ### 2. Commit Guidelines
 
-Use clear, descriptive commit messages:
+Use clear, descriptive commit messages. Prefix each message with a short type such as `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `style:`, `test:` or `perf:`.
 
 ```bash
 # Good examples
-git commit -m "Add chord progression complexity scoring"
-git commit -m "Fix memory leak in structure analyzer"
-git commit -m "Optimize similarity matrix computation"
+git commit -m "feat: add chord progression complexity scoring"
+git commit -m "fix: resolve memory leak in structure analyzer"
+git commit -m "perf: optimize similarity matrix computation"
 
 # Include issue numbers when applicable
-git commit -m "Fix BPM detection for short files (fixes #123)"
+git commit -m "fix: handle short files in BPM detection (fixes #123)"
 ```
 
 ### 3. Pull Request Process
@@ -321,6 +323,7 @@ mypy src/
 - Write descriptive docstrings for all public functions
 - Use meaningful variable names
 - Add comments for complex algorithms
+- Write all code, comments, and docstrings in English
 
 ### Example Code Style
 
