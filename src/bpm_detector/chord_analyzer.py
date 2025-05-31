@@ -4,50 +4,40 @@ import numpy as np
 import librosa
 from typing import List, Tuple, Dict, Any
 
+from .music_theory import NOTE_NAMES
+
 
 class ChordProgressionAnalyzer:
     """Analyzes chord progressions and harmonic features."""
 
-    # Enhanced chord templates including 7th and sus chords for J-Pop
-    CHORD_TEMPLATES = {
-        # Major triads
-        'C': [1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0],  # C major
-        'C#': [0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0],  # C# major
-        'D': [0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0],  # D major
-        'D#': [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0],  # D# major
-        'E': [0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1],  # E major
-        'F': [1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0],  # F major
-        'F#': [0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0],  # F# major
-        'G': [0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1],  # G major
-        'G#': [1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0],  # G# major
-        'A': [0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0],  # A major
-        'A#': [0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0],  # A# major
-        'B': [0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1],  # B major
-        # Minor triads
-        'Cm': [1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0],  # C minor
-        'C#m': [0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],  # C# minor
-        'Dm': [0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0],  # D minor
-        'D#m': [0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0],  # D# minor
-        'Em': [0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1],  # E minor
-        'Fm': [1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0],  # F minor
-        'F#m': [0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0],  # F# minor
-        'Gm': [0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0],  # G minor
-        'G#m': [0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1],  # G# minor
-        'Am': [1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0],  # A minor
-        'A#m': [0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0],  # A# minor
-        'Bm': [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1],  # B minor
-        # Dominant 7th chords (common in J-Pop)
-        'C7': [1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0],  # C7
-        'D7': [0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1],  # D7
-        'D#7': [1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0],  # D#7
-        'F#7': [0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1],  # F#7
-        'G7': [1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1],  # G7
-        # Sus4 chords (common in J-Pop)
-        'Csus4': [1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0],  # Csus4
-        'Dsus4': [0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0],  # Dsus4
-        'Fsus4': [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0],  # Fsus4
-        'Gsus4': [1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0],  # Gsus4
-    }
+    # Chord templates including triads, 7th and sus4 chords for all roots
+    CHORD_TEMPLATES: Dict[str, List[int]] = {}
+
+    for i, note in enumerate(NOTE_NAMES):
+        vec = [0] * 12
+        vec[i] = 1
+        vec[(i + 4) % 12] = 1
+        vec[(i + 7) % 12] = 1
+        CHORD_TEMPLATES[note] = vec
+
+        vec = [0] * 12
+        vec[i] = 1
+        vec[(i + 3) % 12] = 1
+        vec[(i + 7) % 12] = 1
+        CHORD_TEMPLATES[f"{note}m"] = vec
+
+        vec = [0] * 12
+        vec[i] = 1
+        vec[(i + 4) % 12] = 1
+        vec[(i + 7) % 12] = 1
+        vec[(i + 10) % 12] = 1
+        CHORD_TEMPLATES[f"{note}7"] = vec
+
+        vec = [0] * 12
+        vec[i] = 1
+        vec[(i + 5) % 12] = 1
+        vec[(i + 7) % 12] = 1
+        CHORD_TEMPLATES[f"{note}sus4"] = vec
 
     # Roman numeral mapping for functional analysis
     FUNCTIONAL_MAPPING = {
@@ -81,15 +71,15 @@ class ChordProgressionAnalyzer:
         },
     }
 
-    def __init__(self, hop_length: int = 512, frame_size: int = 4096):
+    def __init__(self, hop_length: int = 512, n_fft: int = 2048):
         """Initialize chord analyzer.
 
         Args:
             hop_length: Hop length for analysis
-            frame_size: Frame size for chroma analysis
+            n_fft: FFT size for spectral analysis
         """
         self.hop_length = hop_length
-        self.frame_size = frame_size
+        self.n_fft = n_fft
 
     def extract_chroma_features(self, y: np.ndarray, sr: int) -> np.ndarray:
         """Extract high-resolution chroma features with noise reduction.
@@ -113,14 +103,18 @@ class ChordProgressionAnalyzer:
         # Apply harmonic-percussive separation for cleaner harmonic content
         y_harmonic, _ = librosa.effects.hpss(y_filtered, margin=3.0)
 
-        # Use CQT-based chroma for better harmonic resolution
-        chroma = librosa.feature.chroma_cqt(
-            y=y_harmonic,
+        # Use STFT-based chroma with larger FFT for tension chord detection
+        stft = librosa.stft(
+            y_harmonic,
+            hop_length=self.hop_length,
+            n_fft=self.n_fft,
+        )
+        chroma = librosa.feature.chroma_stft(
+            S=np.abs(stft),
             sr=sr,
             hop_length=self.hop_length,
-            fmin=librosa.note_to_hz('C2'),  # Start from C2
             n_chroma=12,
-            norm=2,  # L2 normalization
+            norm=2,
         )
 
         # Apply 2-second moving window average for stability

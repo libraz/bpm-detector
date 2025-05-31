@@ -1,0 +1,9 @@
+# Changelog
+
+## [0.2.0] - 2025-05-31
+### Added
+- Fallback key output like `Unknown(E♭?)` with analysis notes.
+- Chord detection uses 2048 FFT and recognizes 7th/sus4 chords.
+- Drop chorus and last chorus modulation labeling.
+### Changed
+- Version bumped to 0.2.0.

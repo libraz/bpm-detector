@@ -215,6 +215,45 @@ class JPopStructureOptimizer:
                 i += 1
         
         return processed
+
+    def label_special_chorus_sections(
+        self,
+        sections: List[Dict[str, Any]],
+        y: np.ndarray,
+        sr: int,
+        modulations: List[Dict[str, Any]] | None = None,
+    ) -> List[Dict[str, Any]]:
+        """Label drop chorus and last chorus modulation."""
+        processed = sections.copy()
+
+        energies = []
+        for s in processed:
+            start = int(s.get("start_time", 0) * sr)
+            end = int(s.get("end_time", 0) * sr)
+            seg = y[start:end]
+            if len(seg) == 0:
+                energies.append(-120.0)
+            else:
+                rms = np.sqrt(np.mean(seg ** 2) + 1e-12)
+                energies.append(20 * np.log10(rms))
+
+        for idx, s in enumerate(processed):
+            if s.get("type") == "chorus" and energies[idx] <= -30.0:
+                if modulations and any(
+                    m.get("time", 0) >= s.get("start_time", 0)
+                    and m.get("time", 0) < s.get("end_time", 0)
+                    for m in modulations
+                ):
+                    s["type"] = "drop_chorus"
+                    s["ascii_label"] = "落ちサビ"
+
+        if modulations:
+            last_mod = modulations[-1]
+            if processed and processed[-1].get("type") == "chorus":
+                if last_mod.get("time", 0) >= processed[-1].get("start_time", 0):
+                    processed[-1]["last_chorus_key"] = last_mod.get("to_key")
+
+        return processed
     
     def _process_chorus_chain(self, sections: List[Dict[str, Any]],
                             chorus_indices: List[int], bpm: float) -> None:

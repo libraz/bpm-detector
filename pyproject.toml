@@ -1,6 +1,6 @@
 [project]
 name = "bpm-detector"
-version = "0.1.0"
+version = "0.2.0"
 description = "A Python tool for automatic detection of BPM (tempo) and musical key from audio files"
 authors = [
     { name = "libraz", email = "libraz@libraz.net" }
