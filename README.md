@@ -149,8 +149,8 @@ bpm-detector --detect-key your_audio_file.wav
 # Multiple files
 bpm-detector --detect-key *.wav *.mp3
 
-# Show progress bar
-bpm-detector --progress --detect-key your_audio_file.wav
+# Suppress progress output
+bpm-detector --quiet --detect-key your_audio_file.wav
 
 # Parallel processing (NEW!)
 bpm-detector --comprehensive your_audio_file.wav  # Auto-parallel enabled by default
@@ -308,7 +308,7 @@ docker run --rm -v $(pwd):/workspace bpm-detector --help
 #### Basic Options
 - `--detect-key`: Enable key detection
 - `--comprehensive`: Enable comprehensive music analysis
-- `--progress`: Show progress bar
+- `--quiet`: Suppress progress output
 - `--sr SR`: Sample rate (default: 22050)
 - `--hop HOP`: Hop length (default: 128)
 - `--min_bpm MIN_BPM`: Minimum BPM (default: 40.0)
