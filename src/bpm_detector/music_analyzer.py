@@ -77,7 +77,8 @@ class BPMDetector:
         higher.sort(key=lambda x: -x[1])
 
         if higher and higher[0][1] / total_votes >= THRESH_HIGHER:
-            rep_bpm = max(higher[0][0], higher[0][0])
+            # choose the representative BPM of the strongest higher cluster
+            rep_bpm = higher[0][0]
             conf = 100 * higher[0][1] / total_votes
         else:
             rep_bpm = max(base_vals, key=lambda x: x[1])[0]
