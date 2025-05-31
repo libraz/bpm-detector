@@ -149,8 +149,8 @@ bpm-detector --detect-key your_audio_file.wav
 # 複数ファイルの処理
 bpm-detector --detect-key *.wav *.mp3
 
-# プログレスバーを表示
-bpm-detector --progress --detect-key your_audio_file.wav
+# 進捗表示を抑制
+bpm-detector --quiet --detect-key your_audio_file.wav
 
 # 並列処理（新機能！）
 bpm-detector --comprehensive your_audio_file.wav  # 自動並列処理がデフォルトで有効
@@ -308,7 +308,7 @@ docker run --rm -v $(pwd):/workspace bpm-detector --help
 #### 基本オプション
 - `--detect-key`: キー検出を有効にする
 - `--comprehensive`: 包括的楽曲解析を有効にする
-- `--progress`: プログレスバーを表示
+- `--quiet`: 進捗表示を抑制
 - `--sr SR`: サンプリングレート（デフォルト: 22050）
 - `--hop HOP`: ホップ長（デフォルト: 128）
 - `--min_bpm MIN_BPM`: 最小BPM（デフォルト: 40.0）
