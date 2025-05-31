@@ -153,7 +153,7 @@ bpm-detector --detect-key *.wav *.mp3
 bpm-detector --progress --detect-key your_audio_file.wav
 
 # Parallel processing (NEW!)
-bmp-detector --comprehensive your_audio_file.wav  # Auto-parallel enabled by default
+bpm-detector --comprehensive your_audio_file.wav  # Auto-parallel enabled by default
 bpm-detector --comprehensive --max-workers 4 your_audio_file.wav  # Manual worker count
 bpm-detector --comprehensive --no-parallel your_audio_file.wav  # Disable parallel processing
 bpm-detector --show-system-info  # Show system capabilities and parallel configuration
