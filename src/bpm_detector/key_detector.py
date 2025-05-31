@@ -2,7 +2,7 @@
 
 import numpy as np
 import librosa
-from typing import Dict, Any, Optional, Tuple, TypedDict
+from typing import Dict, Any, Optional, Tuple, TypedDict, List
 from scipy.signal import butter, filtfilt
 from scipy.ndimage import gaussian_filter1d
 
@@ -18,6 +18,7 @@ class KeyDetectionResult(TypedDict):
     mode: str
     confidence: float
     key_strength: float
+    analysis_notes: str
 
 
 class KeyDetector:
@@ -166,20 +167,21 @@ class KeyDetector:
         
         # Adjusted threshold for better key detection (prevent None over-detection)
         if final_confidence < _Constants.MIN_CONFIDENCE:
-            # Instead of returning None, return the best guess with low confidence
-            # This helps avoid key:none in most cases
+            # Return unknown key with candidate information
             return KeyDetectionResult(
-                key=final_key,
-                mode=final_mode,
-                confidence=float(final_confidence * 100.0),  # Still return the actual confidence
-                key_strength=float(key_strength)
+                key=f"Unknown({final_key}?)",
+                mode="Unknown",
+                confidence=float(final_confidence * 100.0),
+                key_strength=float(key_strength),
+                analysis_notes=f"Best candidate {final_key} {final_mode}"
             )
-        
+
         return KeyDetectionResult(
             key=final_key,
             mode=final_mode,
-            confidence=float(final_confidence * 100.0),  # Convert to percentage for test compatibility
-            key_strength=float(key_strength)
+            confidence=float(final_confidence * 100.0),
+            key_strength=float(key_strength),
+            analysis_notes=f"Detected {final_key} {final_mode}"
         )
     
     def detect(self, y: np.ndarray, sr: int) -> Tuple[str, float]:
@@ -196,6 +198,23 @@ class KeyDetector:
         if result['key'] == 'None':
             return 'A', result['confidence']  # Default to A for test compatibility
         return result['key'], result['confidence']
+
+    def compute_modulation_timeseries(
+        self, y: np.ndarray, sr: int, bpm: float, bars: int = 4, hop_bars: int = 2
+    ) -> Dict[str, Any]:
+        """Compute simple modulation score over time using sliding windows."""
+        window_samples = int(((60.0 / bpm) * 4 * bars) * sr)
+        hop_samples = int(((60.0 / bpm) * 4 * hop_bars) * sr)
+        times: List[float] = []
+        scores: List[float] = []
+
+        for start in range(0, max(1, len(y) - window_samples + 1), hop_samples):
+            segment = y[start : start + window_samples]
+            result = self.detect_key(segment, sr)
+            times.append(start / sr)
+            scores.append(result["confidence"])
+
+        return {"times": times, "scores": scores}
 
     def _apply_audio_filters(self, y: np.ndarray, sr: int) -> np.ndarray:
         """Apply audio filtering for better harmonic content extraction.

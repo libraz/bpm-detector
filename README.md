@@ -17,6 +17,7 @@ A comprehensive Python tool for automatic music analysis including BPM, key dete
   - Uses Krumhansl-Schmuckler key profiles
   - Supports both major and minor keys
   - Chroma feature-based analysis
+  - Returns fallback as `Unknown(E♭?)` when confidence is low
 
 ### Advanced Music Analysis (NEW!)
 - **Chord Progression Analysis**: Automatic chord detection and harmonic analysis
@@ -24,6 +25,7 @@ A comprehensive Python tool for automatic music analysis including BPM, key dete
   - Functional harmony analysis (I-vi-IV-V)
   - Modulation detection
   - Chord complexity scoring
+  - Detects 7th and sus4 chords (48-class model)
 - **Song Structure Analysis**: Automatic section detection and form analysis
   - Section boundaries (intro, verse, chorus, bridge)
   - Song form identification (ABABCB)
