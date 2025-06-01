@@ -244,8 +244,9 @@ class ChordProgressionAnalyzer:
         best_triad = max(triad_candidates, key=lambda x: x[1]) if triad_candidates else ('N', 0.0)
         best_tetrad = max(tetrad_candidates, key=lambda x: x[1]) if tetrad_candidates else ('N', 0.0)
 
-        # Use tetrad only if it's significantly better than triad (threshold: 0.05)
-        if best_tetrad[1] > best_triad[1] + 0.05:  # Further relaxed threshold
+        # Prefer triads over 7th chords unless 7th chord is significantly better
+        # Use tetrad only if it's significantly better than triad (threshold: 0.15)
+        if best_tetrad[1] > best_triad[1] + 0.15:  # Higher threshold to prefer triads
             best_chord, best_score = best_tetrad
         else:
             best_chord, best_score = best_triad

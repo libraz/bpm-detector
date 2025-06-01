@@ -180,7 +180,11 @@ class MelodyHarmonyAnalyzer:
             if melody_complexity + harmony_complexity == 0:
                 return 0.5
 
-            balance = min(melody_complexity, harmony_complexity) / max(melody_complexity, harmony_complexity)
+            max_complexity = max(melody_complexity, harmony_complexity)
+            if max_complexity == 0:
+                return 0.5
+
+            balance = min(melody_complexity, harmony_complexity) / max_complexity
             return float(balance)
         except (KeyError, ZeroDivisionError, TypeError):
             return 0.5

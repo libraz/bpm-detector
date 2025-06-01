@@ -32,11 +32,13 @@ class TaskProgress:
 class ProgressManager:
     """Parallel processing progress manager."""
 
-    def __init__(self):
+    def __init__(self, debug: bool = False):
         self._tasks: Dict[str, TaskProgress] = {}
         self._lock = threading.Lock()
         self._callbacks: List[Callable] = []
         self._overall_progress = 0.0
+        self._debug = debug
+        self._start_time = time.time()
 
     def register_task(self, task_id: str, name: str):
         """Register a new task."""
@@ -49,11 +51,17 @@ class ProgressManager:
         with self._lock:
             if task_id in self._tasks:
                 task = self._tasks[task_id]
+                old_progress = task.progress
                 task.progress = min(100.0, max(0.0, progress))
                 task.message = message
                 if task.status == TaskStatus.PENDING:
                     task.status = TaskStatus.RUNNING
                     task.start_time = time.time()
+
+                # Debug output
+                if self._debug:
+                    elapsed = time.time() - self._start_time
+                    print(f"[DEBUG] {elapsed:.1f}s - {task_id}: {old_progress:.1f}% -> {progress:.1f}% ({message})")
         self._notify_update()
 
     def complete_task(self, task_id: str, success: bool = True, error: Optional[str] = None):
@@ -75,7 +83,15 @@ class ProgressManager:
                 return 0.0
 
             total_progress = sum(task.progress for task in self._tasks.values())
-            return total_progress / len(self._tasks)
+            overall = total_progress / len(self._tasks)
+
+            # Debug output
+            if self._debug:
+                elapsed = time.time() - self._start_time
+                task_details = [(task_id, task.progress, task.status.value) for task_id, task in self._tasks.items()]
+                print(f"[DEBUG] {elapsed:.1f}s - Overall: {overall:.1f}% | Tasks: {task_details}")
+
+            return overall
 
     def get_status_summary(self) -> Dict[str, Any]:
         """Get status summary."""
@@ -194,8 +210,8 @@ class SimpleProgressDisplay(ProgressDisplay):
                 completed = sum(1 for task in progress_manager._tasks.values() if task.status == TaskStatus.COMPLETED)
                 total = len(progress_manager._tasks)
 
-            # Only update if progress changed significantly
-            if abs(overall_progress - self.last_progress) < 0.5:
+            # Only update if progress changed significantly (reduced threshold for smoother updates)
+            if abs(overall_progress - self.last_progress) < 0.2:
                 return
 
             # Build progress bar
@@ -233,14 +249,14 @@ class DetailedProgressDisplay(ProgressDisplay):
         self.last_output = ""
         self.update_interval = 0.3  # 300ms for smooth updates
         self.task_start_times = {}  # Track when tasks started
-        self.estimated_durations = {  # Estimated task durations in seconds
-            'basic_info': 2,
-            'chord_progression': 3,
-            'structure': 8,  # Longest task
-            'rhythm': 2,
-            'timbre': 5,
-            'melody_harmony': 4,
-            'dynamics': 1,
+        self.estimated_durations = {  # Estimated task durations in seconds (based on actual measurements)
+            'basic_info': 3,
+            'chord_progression': 13,  # Actually takes ~13 seconds
+            'structure': 170,  # Actually takes ~170 seconds (major bottleneck)
+            'rhythm': 7,  # Actually takes ~7 seconds
+            'timbre': 25,  # Actually takes ~25 seconds
+            'melody_harmony': 160,  # Actually takes ~160 seconds (major bottleneck)
+            'dynamics': 7,  # Actually takes ~7 seconds
         }
 
     def update(self, progress_manager: ProgressManager):
@@ -271,8 +287,8 @@ class DetailedProgressDisplay(ProgressDisplay):
                     estimated_duration = self.estimated_durations.get(task_id, 5)
 
                     # If task hasn't updated progress recently, estimate based on time
-                    if task.progress < 90:  # Don't override near-completion progress
-                        time_based_progress = min(85, (elapsed / estimated_duration) * 100)
+                    if task.progress < 95:  # Don't override near-completion progress
+                        time_based_progress = min(95, (elapsed / estimated_duration) * 100)
                         if time_based_progress > task.progress:
                             task.progress = time_based_progress
 
@@ -305,8 +321,11 @@ class DetailedProgressDisplay(ProgressDisplay):
                 line = f"{status_icon} {task.name:<20} [{bar}] {task.progress:5.1f}%"
                 if task.message:
                     line += f" {task.message}"
-                elif task.status == TaskStatus.RUNNING and task.progress < 90:
-                    line += " (estimating...)"
+                elif task.status == TaskStatus.RUNNING:
+                    if task.progress < 90:
+                        line += " (estimating...)"
+                    else:
+                        line += " (finishing...)"
                 lines.append(line)
 
             # Clear previous output and show new

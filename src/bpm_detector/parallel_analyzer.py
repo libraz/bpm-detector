@@ -63,6 +63,8 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
         max_bpm: float = 300.0,
         start_bpm: float = 150.0,
         progress_callback=None,
+        detailed_progress: bool = False,
+        **kwargs,
     ) -> Dict[str, Any]:
         """Analyze audio file with smart parallelization."""
         return self._analyze_single_file(
@@ -98,15 +100,24 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
         if not comprehensive or not self._should_use_parallel():
             return super().analyze_file(path, detect_key, comprehensive, min_bpm, max_bpm, start_bpm, progress_callback)
 
-        # Setup progress management
-        progress_manager = ProgressManager()
+        # Setup progress management with debug mode
+        import os
+
+        debug_mode = os.environ.get('BPM_DEBUG', '').lower() in ('1', 'true', 'yes')
+        progress_manager = ProgressManager(debug=debug_mode)
 
         # Setup progress callback with safety measures
         if progress_callback:
-            # Use simple callback for basic progress
+            # Use simple callback for basic progress with improved calculation
             def safe_progress_callback(pm):
                 try:
+                    # Get overall progress with better calculation
                     overall_progress = pm.get_overall_progress()
+
+                    # Apply scaling to account for initial setup (10%) and final processing (5%)
+                    # The parallel analysis represents 85% of the total work
+                    scaled_progress = 10 + (overall_progress * 0.85)
+
                     running_tasks = pm.get_running_tasks()
                     if running_tasks:
                         message = f"Running: {', '.join(running_tasks[:2])}"
@@ -115,7 +126,8 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
                             completed = sum(1 for t in pm._tasks.values() if t.status.value == "completed")
                             total = len(pm._tasks)
                             message = f"Completed: {completed}/{total} tasks"
-                    progress_callback(overall_progress, message)
+
+                    progress_callback(scaled_progress, message)
                 except Exception:
                     # Fallback to simple message
                     progress_callback(pm.get_overall_progress(), "Processing...")
@@ -151,6 +163,7 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
                 min_bpm=min_bpm,
                 max_bpm=max_bpm,
                 start_bpm=start_bpm,
+                progress_callback=progress_callback,
             )
 
             # Clear audio data from memory early
@@ -213,6 +226,7 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
         min_bpm: float = 40.0,
         max_bpm: float = 300.0,
         start_bpm: float = 150.0,
+        progress_callback=None,
     ) -> Dict[str, Any]:
         """Perform parallel comprehensive analysis."""
 
@@ -295,15 +309,24 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
                     progress_manager.complete_task(task_id, False, str(e))
                     results[task_id] = {}
 
-        # Generate additional features
+        # Generate additional features with progress updates
         try:
+            # Update progress for final processing
+            if progress_callback:
+                progress_callback(95, "Generating similarity features...")
+
             feature_vector = self.similarity_engine.extract_feature_vector(results)
             results["similarity_features"] = {
                 "feature_vector": feature_vector.tolist(),
                 "feature_weights": self.similarity_engine.feature_weights,
             }
 
+            if progress_callback:
+                progress_callback(97, "Generating reference tags...")
             results["reference_tags"] = self._generate_reference_tags(results)
+
+            if progress_callback:
+                progress_callback(99, "Finalizing analysis...")
             results["production_notes"] = self._generate_production_notes(results)
 
         except Exception as e:
@@ -326,10 +349,13 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
         if config.use_process_pool:
             # Process parallelization for multiple files
             with ProcessPoolExecutor(max_workers=max_workers) as executor:
-                futures = {
-                    path: executor.submit(self._analyze_single_file_worker, path, comprehensive, **kwargs)
-                    for path in paths
-                }
+                futures = {}
+                for path in paths:
+                    # Ensure path is a string
+                    path_str = str(path)
+                    futures[path_str] = executor.submit(
+                        self._analyze_single_file_worker, path_str, comprehensive, **kwargs
+                    )
 
                 results = {}
                 completed = 0
@@ -351,7 +377,11 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
         else:
             # Thread parallelization
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = {path: executor.submit(self.analyze_file, path, **kwargs) for path in paths}
+                futures = {}
+                for path in paths:
+                    # Ensure path is a string
+                    path_str = str(path)
+                    futures[path_str] = executor.submit(self.analyze_file, path_str, **kwargs)
 
                 results = {}
                 completed = 0
@@ -544,9 +574,14 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
                     if segment_chords:
                         # Take the most frequent chords (simplified)
                         unique_chords = list(set(segment_chords))[:4]  # Max 4 chords per section
-                        section_progression = (
-                            ' → '.join(str(chord) for chord in unique_chords) if unique_chords else 'Unknown'
-                        )
+                        # Extract chord names and convert numpy values to Python types
+                        chord_names = []
+                        for chord in unique_chords:
+                            # chord is (name, confidence, start, end) - take only the name
+                            chord_name = str(chord[0])
+                            chord_names.append(chord_name)
+
+                        section_progression = ' → '.join(chord_names) if chord_names else 'Unknown'
                     else:
                         section_progression = 'Unknown'
 

@@ -76,6 +76,14 @@ def classify_vocal_range(lowest: float, highest: float) -> str:
     Returns:
         Vocal range category
     """
+    # Handle case where lowest and highest are the same (single note)
+    if abs(highest - lowest) < 0.1:  # Essentially the same note
+        # Classify based on the single note
+        if lowest < 50:
+            return 'Tenor'  # Default male range
+        else:
+            return 'Alto'  # Default female range
+
     # Filter out extreme values that are likely instrumental
     if highest - lowest > 36:  # More than 3 octaves is likely instrumental
         return 'Instrumental (Wide Range)'

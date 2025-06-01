@@ -3,7 +3,6 @@
 import os
 import tempfile
 import time
-from pathlib import Path
 
 import numpy as np
 import soundfile as sf
@@ -64,7 +63,7 @@ def demonstrate_system_info():
 
     config = AutoParallelConfig.get_optimal_config()
 
-    print(f"🖥️  System Configuration:")
+    print("🖥️  System Configuration:")
     print(f"   Parallel Enabled: {config.enable_parallel}")
     print(f"   Max Workers: {config.max_workers}")
     print(f"   Strategy: {config.strategy.value}")
@@ -119,7 +118,7 @@ def demonstrate_single_file_analysis():
 
     # Performance comparison
     speedup = sequential_time / parallel_time if parallel_time > 0 else 1.0
-    print(f"📊 Performance:")
+    print("📊 Performance:")
     print(f"   Sequential: {sequential_time:.2f}s")
     print(f"   Parallel: {parallel_time:.2f}s")
     print(f"   Speedup: {speedup:.2f}x")
@@ -187,7 +186,7 @@ def demonstrate_multiple_file_analysis():
     # Performance comparison
     speedup = sequential_time / parallel_time if parallel_time > 0 else 1.0
     print()
-    print(f"📈 Performance:")
+    print("📈 Performance:")
     print(f"   Sequential: {sequential_time:.2f}s ({sequential_time/len(test_files):.2f}s per file)")
     print(f"   Parallel: {parallel_time:.2f}s ({parallel_time/len(test_files):.2f}s per file)")
     print(f"   Speedup: {speedup:.2f}x")

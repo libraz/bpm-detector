@@ -138,8 +138,8 @@ def quick_demo():
         if len(reference_sheet.split('\n')) > 15:
             print("... (truncated)")
 
-        print(f"\n✅ Demo completed successfully!")
-        print(f"💡 Tip: Use comprehensive=False for faster analysis when you only need BPM/Key")
+        print("\n✅ Demo completed successfully!")
+        print("💡 Tip: Use comprehensive=False for faster analysis when you only need BPM/Key")
 
     except Exception as e:
         print(f"❌ Error during analysis: {e}")

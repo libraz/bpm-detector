@@ -4,6 +4,7 @@ import os
 import shutil
 import tempfile
 import unittest
+import warnings
 from unittest.mock import patch
 
 import numpy as np
@@ -12,6 +13,12 @@ import soundfile as sf
 from src.bpm_detector.auto_parallel import AutoParallelConfig, ParallelConfig, SystemMonitor
 from src.bpm_detector.parallel_analyzer import SmartParallelAudioAnalyzer
 from src.bpm_detector.progress_manager import ProgressManager, TaskStatus
+
+# Suppress warnings during tests
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="audioread")
+warnings.filterwarnings("ignore", category=UserWarning, module="librosa")
+warnings.filterwarnings("ignore", category=RuntimeWarning, module="sklearn")
+warnings.filterwarnings("ignore", category=RuntimeWarning, module="numpy")
 
 
 class TestAutoParallelConfig(unittest.TestCase):
@@ -209,7 +216,8 @@ class TestSmartParallelAudioAnalyzer(unittest.TestCase):
         analyzer = SmartParallelAudioAnalyzer(auto_parallel=True)
 
         self.assertIsNotNone(analyzer._parallel_config)
-        self.assertTrue(analyzer._parallel_config.enable_parallel)
+        if analyzer._parallel_config is not None:
+            self.assertTrue(analyzer._parallel_config.enable_parallel)
 
     @patch('src.bpm_detector.auto_parallel.cpu_count')
     @patch('src.bpm_detector.auto_parallel.psutil')
@@ -257,7 +265,7 @@ class TestSmartParallelAudioAnalyzer(unittest.TestCase):
         analyzer = SmartParallelAudioAnalyzer(auto_parallel=False)  # Disable for testing
 
         # Test multiple file analysis
-        results = analyzer.analyze_file(test_files, comprehensive=False)
+        results = analyzer.analyze_files(test_files, comprehensive=False)
 
         self.assertIsInstance(results, dict)
         self.assertEqual(len(results), 3)
@@ -393,7 +401,7 @@ class TestAdvancedParallelFeatures(unittest.TestCase):
         test_files = [self.test_file, corrupted_file]
 
         try:
-            results = self.analyzer.analyze_file(test_files, comprehensive=False)
+            results = self.analyzer.analyze_files(test_files, comprehensive=False)
 
             # Should handle errors gracefully
             self.assertIsInstance(results, dict)

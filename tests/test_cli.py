@@ -149,7 +149,10 @@ class TestCLI(unittest.TestCase):
         mock_analyzer = MagicMock()
         mock_analyzer._parallel_config = MagicMock()
         mock_analyzer._parallel_config.enable_parallel = True
-        mock_analyzer.analyze_file.return_value = {
+
+        # Mock both analyze_file and analyze_files methods
+        mock_analyzer.analyze_file.return_value = {"basic_info": {"filename": "test.wav", "bpm": 120.0}}
+        mock_analyzer.analyze_files.return_value = {
             "test1.wav": {"basic_info": {"filename": "test1.wav", "bpm": 120.0}},
             "test2.wav": {"basic_info": {"filename": "test2.wav", "bpm": 130.0}},
             "test3.wav": {"basic_info": {"filename": "test3.wav", "bpm": 140.0}},
@@ -162,8 +165,9 @@ class TestCLI(unittest.TestCase):
             with patch("sys.stdout", io.StringIO()):
                 main()
 
-        # Should call analyze_file (either once for batch or multiple times for fallback)
-        self.assertGreater(mock_analyzer.analyze_file.call_count, 0)
+        # Should call analyze_files for multiple files or analyze_file for fallback
+        total_calls = mock_analyzer.analyze_file.call_count + mock_analyzer.analyze_files.call_count
+        self.assertGreater(total_calls, 0)
         # Verify that the analyzer was created
         mock_analyzer_class.assert_called_once()
 

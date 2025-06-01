@@ -290,8 +290,8 @@ def analyze_file_with_progress(path: str, analyzer, args: argparse.Namespace) ->
             if interrupted:
                 raise KeyboardInterrupt("Analysis interrupted by user")
 
-            # Fallback progress display if no detailed display
-            if not progress_display and args.progress:
+            # Always show progress if enabled
+            if args.progress:
                 clean_message = message.replace('\n', ' ').replace('\r', ' ')
                 print(
                     f"\r{' ' * 80}\r{Fore.BLUE}Progress: {progress:.1f}% - {clean_message}{Style.RESET_ALL}",
@@ -307,7 +307,7 @@ def analyze_file_with_progress(path: str, analyzer, args: argparse.Namespace) ->
                 min_bpm=args.min_bpm,
                 max_bpm=args.max_bpm,
                 start_bpm=args.start_bpm,
-                progress_callback=(smart_progress_callback if args.progress and not progress_display else None),
+                progress_callback=(smart_progress_callback if args.progress else None),
             )
 
             if progress_display:
@@ -439,6 +439,7 @@ def main() -> None:
             print(f"{Fore.RED}Files not found: {', '.join(invalid_files)}{Style.RESET_ALL}")
 
         if not valid_files:
+            print(f"{Fore.RED}No valid files to process{Style.RESET_ALL}")
             return
 
         # Use smart analyzer for multiple files if available
@@ -463,6 +464,10 @@ def main() -> None:
                     comprehensive=args.comprehensive,
                     progress_callback=(multi_progress_callback if args.progress else None),
                     detailed_progress=args.detailed_progress,
+                    detect_key=args.detect_key,
+                    min_bpm=args.min_bpm,
+                    max_bpm=args.max_bpm,
+                    start_bpm=args.start_bpm,
                 )
 
                 if args.progress:
