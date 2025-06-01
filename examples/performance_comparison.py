@@ -2,9 +2,10 @@
 
 import os
 import sys
+import time
+
 import numpy as np
 import soundfile as sf
-import time
 
 # Add the src directory to the path so we can import bpm_detector
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -90,9 +91,7 @@ def benchmark_analysis():
                 }
             )
 
-            print(
-                f"  Basic: {basic_time:.2f}s, Comprehensive: {comp_time:.2f}s, Ratio: {comp_time/basic_time:.1f}x"
-            )
+            print(f"  Basic: {basic_time:.2f}s, Comprehensive: {comp_time:.2f}s, Ratio: {comp_time/basic_time:.1f}x")
 
         except Exception as e:
             print(f"  Error: {e}")
@@ -105,9 +104,7 @@ def benchmark_analysis():
     print("Duration | Basic Time | Comprehensive Time | Speed Ratio")
     print("-" * 55)
     for r in results:
-        print(
-            f"{r['duration']:8}s | {r['basic_time']:10.2f}s | {r['comprehensive_time']:18.2f}s | {r['ratio']:10.1f}x"
-        )
+        print(f"{r['duration']:8}s | {r['basic_time']:10.2f}s | {r['comprehensive_time']:18.2f}s | {r['ratio']:10.1f}x")
 
     # Performance recommendations
     print("\n=== Recommendations ===")

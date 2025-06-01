@@ -1,7 +1,7 @@
 """Tests for detector module."""
 
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import numpy as np
 
@@ -75,9 +75,7 @@ class TestKeyDetector(unittest.TestCase):
         self.assertIsInstance(confidence, float)
         self.assertGreaterEqual(confidence, 0)
         self.assertLessEqual(confidence, 100)
-        self.assertTrue(
-            any(note in key for note in ["C", "D", "E", "F", "G", "A", "B"])
-        )
+        self.assertTrue(any(note in key for note in ["C", "D", "E", "F", "G", "A", "B"]))
         self.assertTrue("Major" in key or "Minor" in key)
 
     @patch("librosa.feature.chroma_stft")
@@ -115,12 +113,7 @@ class TestAudioAnalyzer(unittest.TestCase):
         mock_load.return_value = (np.random.rand(22050), 22050)
 
         # Mock BPM detection
-        mock_bpm_detect.return_value = (
-            120.0,
-            85.5,
-            np.array([120.0, 240.0]),
-            np.array([45, 23]),
-        )
+        mock_bpm_detect.return_value = (120.0, 85.5, np.array([120.0, 240.0]), np.array([45, 23]))
 
         results = self.analyzer.analyze_file("test.wav", detect_key=False)
 
@@ -153,12 +146,7 @@ class TestAudioAnalyzer(unittest.TestCase):
         mock_load.return_value = (np.random.rand(22050), 22050)
 
         # Mock BPM detection
-        mock_bpm_detect.return_value = (
-            120.0,
-            85.5,
-            np.array([120.0, 240.0]),
-            np.array([45, 23]),
-        )
+        mock_bpm_detect.return_value = (120.0, 85.5, np.array([120.0, 240.0]), np.array([45, 23]))
 
         # Mock key detection
         mock_key_detect.return_value = ("C Major", 78.2)
@@ -179,9 +167,7 @@ class TestAudioAnalyzer(unittest.TestCase):
             # Key detection result may vary due to actual implementation
             self.assertIsInstance(basic_info["key"], str)
             self.assertIsInstance(basic_info["key_confidence"], (int, float))
-            self.assertTrue(
-                "Major" in basic_info["key"] or "Minor" in basic_info["key"]
-            )
+            self.assertTrue("Major" in basic_info["key"] or "Minor" in basic_info["key"])
         else:
             # Fallback to old structure
             self.assertIn("filename", results)

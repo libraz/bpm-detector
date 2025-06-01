@@ -27,9 +27,7 @@ class TestParallelConfig(unittest.TestCase):
 
     def test_parallel_config_creation(self):
         """Test parallel config creation."""
-        config = ParallelConfig(
-            enable_parallel=True, max_workers=4, strategy=ParallelStrategy.THREAD_POOL
-        )
+        config = ParallelConfig(enable_parallel=True, max_workers=4, strategy=ParallelStrategy.THREAD_POOL)
 
         self.assertTrue(config.enable_parallel)
         self.assertEqual(config.max_workers, 4)
@@ -102,9 +100,7 @@ class TestAutoParallelConfig(unittest.TestCase):
 
     def test_get_file_count_adjustment(self):
         """Test file count adjustment."""
-        base_config = ParallelConfig(
-            enable_parallel=True, max_workers=4, strategy=ParallelStrategy.THREAD_POOL
-        )
+        base_config = ParallelConfig(enable_parallel=True, max_workers=4, strategy=ParallelStrategy.THREAD_POOL)
 
         # Test with small file count
         small_adjusted = AutoParallelConfig.get_file_count_adjustment(2, base_config)

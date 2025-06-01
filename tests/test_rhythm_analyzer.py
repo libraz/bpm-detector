@@ -2,7 +2,6 @@
 
 import unittest
 
-import librosa
 import numpy as np
 
 from src.bpm_detector.rhythm_analyzer import RhythmAnalyzer
@@ -34,9 +33,7 @@ class TestRhythmAnalyzer(unittest.TestCase):
                 # Create a short impulse
                 impulse_length = int(0.05 * self.sr)  # 50ms impulse
                 end_idx = min(beat_idx + impulse_length, len(signal))
-                signal[beat_idx:end_idx] = 0.8 * np.sin(
-                    2 * np.pi * 1000 * t[beat_idx:end_idx]
-                )
+                signal[beat_idx:end_idx] = 0.8 * np.sin(2 * np.pi * 1000 * t[beat_idx:end_idx])
 
         # Add some background tone
         signal += 0.2 * np.sin(2 * np.pi * 440 * t)
@@ -51,14 +48,7 @@ class TestRhythmAnalyzer(unittest.TestCase):
         features = self.analyzer.extract_onset_features(self.test_signal, self.sr)
 
         # Check that all expected features are present
-        expected_features = [
-            'onset_strength',
-            'onset_times',
-            'onset_frames',
-            'tempo',
-            'beat_frames',
-            'beat_times',
-        ]
+        expected_features = ['onset_strength', 'onset_times', 'onset_frames', 'tempo', 'beat_frames', 'beat_times']
 
         for feature_name in expected_features:
             self.assertIn(feature_name, features)
@@ -92,12 +82,7 @@ class TestRhythmAnalyzer(unittest.TestCase):
         patterns = self.analyzer.extract_rhythm_patterns(features, '4/4')
 
         # Check required keys
-        required_keys = [
-            'rhythmic_complexity',
-            'syncopation_level',
-            'pattern_regularity',
-            'subdivision_density',
-        ]
+        required_keys = ['rhythmic_complexity', 'syncopation_level', 'pattern_regularity', 'subdivision_density']
         for key in required_keys:
             self.assertIn(key, patterns)
             self.assertIsInstance(patterns[key], float)
@@ -124,9 +109,7 @@ class TestRhythmAnalyzer(unittest.TestCase):
         """Test swing ratio calculation."""
         # Create straight rhythm
         features = self.analyzer.extract_onset_features(self.test_signal, self.sr)
-        swing_ratio = self.analyzer._calculate_swing_ratio(
-            features['onset_times'], features['beat_times']
-        )
+        swing_ratio = self.analyzer._calculate_swing_ratio(features['onset_times'], features['beat_times'])
 
         # Should be close to 0.5 for straight rhythm
         self.assertGreaterEqual(swing_ratio, 0.0)
@@ -190,9 +173,7 @@ class TestRhythmAnalyzer(unittest.TestCase):
             'beat_times': np.arange(0, 10, 1.0),
         }
 
-        score = self.analyzer._score_time_signature(
-            beat_intervals, signature_info, mock_features
-        )
+        score = self.analyzer._score_time_signature(beat_intervals, signature_info, mock_features)
 
         # Should return a score between 0 and 1
         self.assertGreaterEqual(score, 0.0)
@@ -204,9 +185,7 @@ class TestRhythmAnalyzer(unittest.TestCase):
         onset_times = np.array([0, 1, 2, 3, 4])
         beat_times = np.array([0, 1, 2, 3, 4])
 
-        complexity = self.analyzer._calculate_rhythmic_complexity(
-            onset_times, beat_times
-        )
+        complexity = self.analyzer._calculate_rhythmic_complexity(onset_times, beat_times)
 
         # Should return a value between 0 and 1
         self.assertGreaterEqual(complexity, 0.0)
@@ -218,9 +197,7 @@ class TestRhythmAnalyzer(unittest.TestCase):
         onset_times = np.array([0, 0.5, 1, 1.5, 2])  # Some off-beat onsets
         beat_times = np.array([0, 1, 2, 3, 4])
 
-        syncopation = self.analyzer._calculate_syncopation(
-            onset_times, beat_times, '4/4'
-        )
+        syncopation = self.analyzer._calculate_syncopation(onset_times, beat_times, '4/4')
 
         # Should return a value between 0 and 1
         self.assertGreaterEqual(syncopation, 0.0)
@@ -254,9 +231,7 @@ class TestRhythmAnalyzer(unittest.TestCase):
         regular_onsets = np.array([0, 1, 2, 3, 4, 5])
         regular_beats = np.array([0, 1, 2, 3, 4, 5])
 
-        regularity = self.analyzer._calculate_pattern_regularity(
-            regular_onsets, regular_beats
-        )
+        regularity = self.analyzer._calculate_pattern_regularity(regular_onsets, regular_beats)
 
         # Should be high for regular pattern
         self.assertGreaterEqual(regularity, 0.0)
@@ -266,9 +241,7 @@ class TestRhythmAnalyzer(unittest.TestCase):
         irregular_onsets = np.array([0, 0.7, 2.3, 2.9, 4.1, 5.8])
         irregular_beats = np.array([0, 1, 2, 3, 4, 5])
 
-        irregularity = self.analyzer._calculate_pattern_regularity(
-            irregular_onsets, irregular_beats
-        )
+        irregularity = self.analyzer._calculate_pattern_regularity(irregular_onsets, irregular_beats)
 
         # Should be lower for irregular pattern
         self.assertLess(irregularity, regularity)
@@ -281,9 +254,7 @@ class TestRhythmAnalyzer(unittest.TestCase):
         t = np.linspace(0, duration, int(sr * duration))
 
         # Create swing pattern (long-short-long-short)
-        beat_times = np.array(
-            [0, 0.67, 1.0, 1.67, 2.0, 2.67, 3.0, 3.67]
-        )  # Swing eighths
+        beat_times = np.array([0, 0.67, 1.0, 1.67, 2.0, 2.67, 3.0, 3.67])  # Swing eighths
         swing_audio = np.zeros_like(t)
 
         for beat_time in beat_times:
@@ -314,16 +285,12 @@ class TestRhythmAnalyzer(unittest.TestCase):
         dense_onsets = np.arange(0, 4, 0.125)  # 32nd notes
         beat_times = np.arange(0, 4, 0.5)  # Beat times array
 
-        dense_density = self.analyzer._calculate_subdivision_density(
-            dense_onsets, beat_times
-        )
+        dense_density = self.analyzer._calculate_subdivision_density(dense_onsets, beat_times)
 
         # Create sparse rhythmic pattern
         sparse_onsets = np.arange(0, 4, 1.0)  # Quarter notes
 
-        sparse_density = self.analyzer._calculate_subdivision_density(
-            sparse_onsets, beat_times
-        )
+        sparse_density = self.analyzer._calculate_subdivision_density(sparse_onsets, beat_times)
 
         # Dense pattern should have higher density
         self.assertGreater(dense_density, sparse_density)
@@ -363,9 +330,7 @@ class TestRhythmAnalyzer(unittest.TestCase):
         few_onsets = np.array([0, 2])
         beat_times = np.array([0, 1, 2])  # Create beat times array
 
-        few_complexity = self.analyzer._calculate_rhythmic_complexity(
-            few_onsets, beat_times
-        )
+        few_complexity = self.analyzer._calculate_rhythmic_complexity(few_onsets, beat_times)
         self.assertIsInstance(few_complexity, (int, float))
         self.assertGreaterEqual(few_complexity, 0.0)
         self.assertLessEqual(few_complexity, 1.0)
@@ -374,9 +339,7 @@ class TestRhythmAnalyzer(unittest.TestCase):
         many_onsets = np.linspace(0, 4, 100)
         many_beat_times = np.linspace(0, 4, 17)  # Create beat times array
 
-        many_complexity = self.analyzer._calculate_rhythmic_complexity(
-            many_onsets, many_beat_times
-        )
+        many_complexity = self.analyzer._calculate_rhythmic_complexity(many_onsets, many_beat_times)
         self.assertIsInstance(many_complexity, (int, float))
         self.assertGreaterEqual(many_complexity, 0.0)
         self.assertLessEqual(many_complexity, 1.0)

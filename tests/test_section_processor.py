@@ -1,7 +1,6 @@
 """Tests for section processor module."""
 
 import unittest
-from unittest.mock import MagicMock, patch
 
 import numpy as np
 
@@ -159,9 +158,7 @@ class TestSectionProcessor(unittest.TestCase):
             'mfcc': np.random.randn(13, 3),
         }
 
-        subtype = self.processor._classify_instrumental_subtype(
-            instrumental_section, spectral_features
-        )
+        subtype = self.processor._classify_instrumental_subtype(instrumental_section, spectral_features)
 
         # Should return a valid subtype
         self.assertIsInstance(subtype, str)
@@ -173,12 +170,7 @@ class TestSectionProcessor(unittest.TestCase):
         form_analysis = self.processor.analyze_form(self.test_sections)
 
         # Check required fields
-        required_fields = [
-            'form',
-            'section_count',
-            'total_duration',
-            'structure_complexity',
-        ]
+        required_fields = ['form', 'section_count', 'total_duration', 'structure_complexity']
         for field in required_fields:
             self.assertIn(field, form_analysis)
 
@@ -229,9 +221,7 @@ class TestSectionProcessor(unittest.TestCase):
             {'type': 'verse', 'start_time': 60, 'end_time': 90},
             {'type': 'chorus', 'start_time': 90, 'end_time': 120},
         ]
-        simple_complexity = self.processor._calculate_structural_complexity(
-            simple_sections
-        )
+        simple_complexity = self.processor._calculate_structural_complexity(simple_sections)
 
         # Complex structure should have higher complexity
         self.assertGreaterEqual(complexity, simple_complexity)
@@ -271,31 +261,14 @@ class TestSectionProcessor(unittest.TestCase):
         # Create sections with some very short ones
         sections_with_short = [
             {'start_time': 0.0, 'end_time': 15.0, 'type': 'intro', 'confidence': 0.8},
-            {
-                'start_time': 15.0,
-                'end_time': 17.0,
-                'type': 'verse',
-                'confidence': 0.6,
-            },  # Very short
+            {'start_time': 15.0, 'end_time': 17.0, 'type': 'verse', 'confidence': 0.6},  # Very short
             {'start_time': 17.0, 'end_time': 40.0, 'type': 'verse', 'confidence': 0.9},
-            {
-                'start_time': 40.0,
-                'end_time': 42.0,
-                'type': 'bridge',
-                'confidence': 0.5,
-            },  # Very short
-            {
-                'start_time': 42.0,
-                'end_time': 65.0,
-                'type': 'chorus',
-                'confidence': 0.95,
-            },
+            {'start_time': 40.0, 'end_time': 42.0, 'type': 'bridge', 'confidence': 0.5},  # Very short
+            {'start_time': 42.0, 'end_time': 65.0, 'type': 'chorus', 'confidence': 0.95},
         ]
 
         processed = self.processor.post_process_sections(
-            sections_with_short,
-            total_duration=65.0,
-            merge_threshold=5.0,  # Merge sections shorter than 5 seconds
+            sections_with_short, total_duration=65.0, merge_threshold=5.0  # Merge sections shorter than 5 seconds
         )
 
         # Should have fewer sections after merging
@@ -320,9 +293,7 @@ class TestSectionProcessor(unittest.TestCase):
         """Test processing with single section."""
         single_section = [self.test_sections[0]]
 
-        processed = self.processor.post_process_sections(
-            single_section, total_duration=10.0
-        )
+        processed = self.processor.post_process_sections(single_section, total_duration=10.0)
 
         # Should return the single section (possibly modified)
         self.assertIsInstance(processed, list)
@@ -338,10 +309,7 @@ class TestSectionProcessor(unittest.TestCase):
         self.assertEqual(form_analysis['section_count'], 1)
 
         # Test with many repeated sections
-        repeated_sections = [
-            {'type': 'verse', 'start_time': i * 10, 'end_time': (i + 1) * 10}
-            for i in range(10)
-        ]
+        repeated_sections = [{'type': 'verse', 'start_time': i * 10, 'end_time': (i + 1) * 10} for i in range(10)]
 
         form_analysis = self.processor.analyze_form(repeated_sections)
         self.assertIsInstance(form_analysis, dict)
@@ -410,9 +378,7 @@ class TestSectionProcessor(unittest.TestCase):
             },
         ]
 
-        processed = self.processor._merge_chorus_instrumental_chorus(
-            test_sections, 130.5
-        )
+        processed = self.processor._merge_chorus_instrumental_chorus(test_sections, 130.5)
 
         # With max chorus length limit, the behavior changes:
         # - First B-D-B: 16.2s instrumental > 16.18s limit, so no merge
@@ -465,9 +431,7 @@ class TestSectionProcessor(unittest.TestCase):
             # Total would be 44s > 29.4s limit
         ]
 
-        processed = self.processor._merge_chorus_instrumental_chorus(
-            test_sections, 130.5
-        )
+        processed = self.processor._merge_chorus_instrumental_chorus(test_sections, 130.5)
 
         # Should NOT merge due to length limit, so should remain 3 sections
         self.assertEqual(len(processed), 3)
@@ -518,9 +482,7 @@ class TestSectionProcessor(unittest.TestCase):
             # Total would be 28s < 29.4s limit
         ]
 
-        processed = self.processor._merge_chorus_instrumental_chorus(
-            test_sections, 130.5
-        )
+        processed = self.processor._merge_chorus_instrumental_chorus(test_sections, 130.5)
 
         # Should merge into 1 section
         self.assertEqual(len(processed), 1)
@@ -584,9 +546,7 @@ class TestSectionProcessor(unittest.TestCase):
             },
         ]
 
-        processed = self.processor._merge_chorus_instrumental_chorus(
-            yoru_ni_kakeru_pattern, 130.5
-        )
+        processed = self.processor._merge_chorus_instrumental_chorus(yoru_ni_kakeru_pattern, 130.5)
 
         # Calculate max allowed duration (16 bars)
         eight_bar = (8 * 4 * 60) / 130.5
@@ -594,9 +554,7 @@ class TestSectionProcessor(unittest.TestCase):
 
         # Should prevent creation of super-long chorus (74s > 29.4s)
         # Should result in partial merging or no merging to stay within limits
-        self.assertGreater(
-            len(processed), 1, "Should not merge all into one super-long chorus"
-        )
+        self.assertGreater(len(processed), 1, "Should not merge all into one super-long chorus")
 
         # Check that no individual chorus exceeds the 16-bar limit
         for i, section in enumerate(processed):
@@ -650,21 +608,15 @@ class TestSectionProcessor(unittest.TestCase):
             },
         ]
 
-        processed = self.processor._merge_chorus_instrumental_chorus(
-            second_pattern, 130.5
-        )
+        processed = self.processor._merge_chorus_instrumental_chorus(second_pattern, 130.5)
 
         # Calculate max allowed duration
         eight_bar = (8 * 4 * 60) / 130.5
         max_allowed = 16 * eight_bar / 8  # 16 bars ≈ 29.4s
 
         # Total would be 56s without limits, should be prevented
-        total_duration = (
-            second_pattern[-1]['end_time'] - second_pattern[0]['start_time']
-        )
-        self.assertEqual(
-            total_duration, 56.0, "Test data verification: total should be 56s"
-        )
+        total_duration = second_pattern[-1]['end_time'] - second_pattern[0]['start_time']
+        self.assertEqual(total_duration, 56.0, "Test data verification: total should be 56s")
 
         # Should not create a single 56s chorus
         single_chorus_found = False
@@ -673,9 +625,7 @@ class TestSectionProcessor(unittest.TestCase):
                 single_chorus_found = True
                 break
 
-        self.assertFalse(
-            single_chorus_found, "Should not create a single 56s super-long chorus"
-        )
+        self.assertFalse(single_chorus_found, "Should not create a single 56s super-long chorus")
 
         # All chorus sections should be within reasonable limits
         for section in processed:
@@ -725,9 +675,7 @@ class TestSectionProcessor(unittest.TestCase):
         t = np.linspace(0, duration, int(sr * duration))
         y = 0.5 * np.sin(2 * np.pi * 440 * t)
 
-        processed = self.processor._break_consecutive_chorus_chains(
-            consecutive_chorus_pattern, y, sr, 130.5
-        )
+        processed = self.processor._break_consecutive_chorus_chains(consecutive_chorus_pattern, y, sr, 130.5)
 
         # Should have vocal_ratio added to all sections
         for section in processed:
@@ -752,15 +700,11 @@ class TestSectionProcessor(unittest.TestCase):
 
         # More complex signal (simulating vocal)
         y_vocal = (
-            0.3 * np.sin(2 * np.pi * 440 * t)
-            + 0.2 * np.sin(2 * np.pi * 880 * t)
-            + 0.1 * np.sin(2 * np.pi * 1760 * t)
+            0.3 * np.sin(2 * np.pi * 440 * t) + 0.2 * np.sin(2 * np.pi * 880 * t) + 0.1 * np.sin(2 * np.pi * 1760 * t)
         )
 
         # Test vocal detection
-        vocal_ratio_instrumental = self.processor._detect_vocal_presence(
-            y_instrumental, sr, 0.0, 5.0
-        )
+        vocal_ratio_instrumental = self.processor._detect_vocal_presence(y_instrumental, sr, 0.0, 5.0)
         vocal_ratio_vocal = self.processor._detect_vocal_presence(y_vocal, sr, 0.0, 5.0)
 
         # Both should return valid ratios
@@ -831,14 +775,10 @@ class TestSectionProcessor(unittest.TestCase):
         y = 0.5 * np.sin(2 * np.pi * 440 * t)
 
         # Process with full post-processing pipeline
-        processed = self.processor.post_process_sections(
-            yoru_pattern, bpm=130.5, y=y, sr=sr
-        )
+        processed = self.processor.post_process_sections(yoru_pattern, bpm=130.5, y=y, sr=sr)
 
         # Should reduce section count from original
-        self.assertLessEqual(
-            len(processed), len(yoru_pattern), "Should reduce or maintain section count"
-        )
+        self.assertLessEqual(len(processed), len(yoru_pattern), "Should reduce or maintain section count")
 
         # Should have vocal_ratio information added
         for section in processed:
@@ -847,9 +787,7 @@ class TestSectionProcessor(unittest.TestCase):
         # Should not create super-long sections (> 60s)
         for section in processed:
             self.assertLessEqual(
-                section['duration'],
-                60.0,
-                f"Section should not exceed 60s: {section['duration']:.1f}s",
+                section['duration'], 60.0, f"Section should not exceed 60s: {section['duration']:.1f}s"
             )
 
         # Should maintain reasonable structure
@@ -898,9 +836,7 @@ class TestSectionProcessor(unittest.TestCase):
         ]
 
         # Test consecutive pre-chorus suppression
-        processed = self.processor._suppress_consecutive_pre_chorus(
-            test_sections.copy()
-        )
+        processed = self.processor._suppress_consecutive_pre_chorus(test_sections.copy())
 
         # Second pre_chorus should be downgraded to verse and locked
         self.assertEqual(processed[2]['type'], 'verse')
@@ -948,9 +884,7 @@ class TestSectionProcessor(unittest.TestCase):
 
         # Check that all ASCII labels are consistent with JP_ASCII_LABELS
         for section in processed:
-            expected_label = self.processor.JP_ASCII_LABELS.get(
-                section['type'], section['type']
-            )
+            expected_label = self.processor.JP_ASCII_LABELS.get(section['type'], section['type'])
             actual_label = section.get('ascii_label', section['type'])
             self.assertEqual(
                 actual_label,
@@ -1005,10 +939,7 @@ class TestSectionProcessor(unittest.TestCase):
         # Check that the processing order prevents R→R→B patterns
         consecutive_pre_chorus_count = 0
         for i in range(len(processed) - 1):
-            if (
-                processed[i]['type'] == 'pre_chorus'
-                and processed[i + 1]['type'] == 'pre_chorus'
-            ):
+            if processed[i]['type'] == 'pre_chorus' and processed[i + 1]['type'] == 'pre_chorus':
                 consecutive_pre_chorus_count += 1
 
         # Should have no consecutive pre-chorus sections
@@ -1046,9 +977,7 @@ class TestSectionProcessor(unittest.TestCase):
             },  # Should become chorus
         ]
 
-        processed = self.processor._collapse_alternating_ar_patterns(
-            test_sections.copy()
-        )
+        processed = self.processor._collapse_alternating_ar_patterns(test_sections.copy())
 
         # Third section (verse) should be converted to chorus
         self.assertEqual(processed[2]['type'], 'chorus')
@@ -1137,9 +1066,7 @@ class TestSectionProcessor(unittest.TestCase):
         # Should achieve some section reduction (with max chorus length limits)
         # Original: 8 sections, expect around 6 sections after processing
         self.assertLessEqual(len(processed), 7)  # Some reduction expected
-        self.assertGreaterEqual(
-            len(processed), 5
-        )  # But not too aggressive due to length limits
+        self.assertGreaterEqual(len(processed), 5)  # But not too aggressive due to length limits
 
         # Should not have consecutive pre-chorus
         for i in range(len(processed) - 1):
@@ -1148,9 +1075,7 @@ class TestSectionProcessor(unittest.TestCase):
 
         # Should have proper ASCII labels
         for section in processed:
-            expected_label = self.processor.JP_ASCII_LABELS.get(
-                section['type'], section['type']
-            )
+            expected_label = self.processor.JP_ASCII_LABELS.get(section['type'], section['type'])
             self.assertEqual(section.get('ascii_label'), expected_label)
 
 

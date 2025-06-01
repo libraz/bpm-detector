@@ -1,7 +1,5 @@
 """Music theory constants and utilities."""
 
-from typing import Dict
-
 # Note names for pitch analysis
 NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
@@ -138,6 +136,4 @@ def classify_vocal_range(lowest: float, highest: float) -> str:
                 min_distance = distance
                 best_match = range_name
 
-        return (
-            best_match if best_match != 'Unknown' else 'Alto'
-        )  # Default to Alto for female
+        return best_match if best_match != 'Unknown' else 'Alto'  # Default to Alto for female

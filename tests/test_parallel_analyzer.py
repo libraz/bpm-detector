@@ -9,11 +9,7 @@ from unittest.mock import patch
 import numpy as np
 import soundfile as sf
 
-from src.bpm_detector.auto_parallel import (
-    AutoParallelConfig,
-    ParallelConfig,
-    SystemMonitor,
-)
+from src.bpm_detector.auto_parallel import AutoParallelConfig, ParallelConfig, SystemMonitor
 from src.bpm_detector.parallel_analyzer import SmartParallelAudioAnalyzer
 from src.bpm_detector.progress_manager import ProgressManager, TaskStatus
 
@@ -55,9 +51,7 @@ class TestAutoParallelConfig(unittest.TestCase):
 
     def test_file_count_adjustment(self):
         """Test configuration adjustment based on file count."""
-        base_config = ParallelConfig(
-            enable_parallel=True, max_workers=8, use_process_pool=False
-        )
+        base_config = ParallelConfig(enable_parallel=True, max_workers=8, use_process_pool=False)
 
         # Single file
         single_config = AutoParallelConfig.get_file_count_adjustment(1, base_config)
@@ -232,9 +226,7 @@ class TestSmartParallelAudioAnalyzer(unittest.TestCase):
         if analyzer._parallel_config:
             self.assertEqual(analyzer._parallel_config.max_workers, 4)
 
-    @patch(
-        'src.bpm_detector.parallel_analyzer.SmartParallelAudioAnalyzer._should_use_parallel'
-    )
+    @patch('src.bpm_detector.parallel_analyzer.SmartParallelAudioAnalyzer._should_use_parallel')
     def test_fallback_to_sequential(self, mock_should_use_parallel):
         """Test fallback to sequential processing."""
         mock_should_use_parallel.return_value = False
@@ -242,9 +234,7 @@ class TestSmartParallelAudioAnalyzer(unittest.TestCase):
         analyzer = SmartParallelAudioAnalyzer(auto_parallel=True)
 
         # Should fall back to parent class method
-        with patch.object(
-            analyzer.__class__.__bases__[0], 'analyze_file'
-        ) as mock_parent:
+        with patch.object(analyzer.__class__.__bases__[0], 'analyze_file') as mock_parent:
             mock_parent.return_value = {"test": "result"}
 
             analyzer.analyze_file(self.test_file, comprehensive=True)
@@ -264,9 +254,7 @@ class TestSmartParallelAudioAnalyzer(unittest.TestCase):
             sf.write(file_path, audio, sr)
             test_files.append(file_path)
 
-        analyzer = SmartParallelAudioAnalyzer(
-            auto_parallel=False
-        )  # Disable for testing
+        analyzer = SmartParallelAudioAnalyzer(auto_parallel=False)  # Disable for testing
 
         # Test multiple file analysis
         results = analyzer.analyze_file(test_files, comprehensive=False)
@@ -310,10 +298,7 @@ class TestAdvancedParallelFeatures(unittest.TestCase):
             progress_updates.append((progress, message))
 
         self.analyzer.analyze_file(
-            self.test_file,
-            comprehensive=True,
-            progress_callback=progress_callback,
-            detailed_progress=True,
+            self.test_file, comprehensive=True, progress_callback=progress_callback, detailed_progress=True
         )
 
         # Should have received progress updates
@@ -387,9 +372,7 @@ class TestAdvancedParallelFeatures(unittest.TestCase):
         try:
             # Test file count adjustment
             base_config = AutoParallelConfig.get_optimal_config()
-            adjusted_config = AutoParallelConfig.get_file_count_adjustment(
-                len(large_batch), base_config
-            )
+            adjusted_config = AutoParallelConfig.get_file_count_adjustment(len(large_batch), base_config)
 
             self.assertIsInstance(adjusted_config.max_workers, int)
             self.assertGreater(adjusted_config.max_workers, 0)
@@ -489,10 +472,7 @@ class TestAdvancedParallelFeatures(unittest.TestCase):
 
     def test_detailed_progress_tracking(self):
         """Test detailed progress tracking functionality."""
-        from src.bpm_detector.progress_manager import (
-            DetailedProgressDisplay,
-            ProgressManager,
-        )
+        from src.bpm_detector.progress_manager import DetailedProgressDisplay, ProgressManager
 
         progress_manager = ProgressManager()
         detailed_display = DetailedProgressDisplay()

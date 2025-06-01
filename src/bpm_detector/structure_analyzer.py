@@ -76,32 +76,22 @@ class StructureAnalyzer:
         features = self.boundary_detector.extract_structural_features(y, sr)
 
         # Compute self-similarity matrix
-        similarity_matrix = self.boundary_detector.compute_self_similarity_matrix(
-            features
-        )
+        similarity_matrix = self.boundary_detector.compute_self_similarity_matrix(features)
 
         # Detect boundaries with dynamic segment length
-        boundaries = self.boundary_detector.detect_boundaries(
-            similarity_matrix, sr, bpm=bpm
-        )
+        boundaries = self.boundary_detector.detect_boundaries(similarity_matrix, sr, bpm=bpm)
 
         # Beat snap alignment
         boundaries = self.boundary_detector.snap_to_beat(boundaries, sr, bpm)
 
         # Classify sections with similarity matrix for verse repetition detection
-        sections = self.section_classifier.classify_sections(
-            y, sr, boundaries, similarity_matrix
-        )
+        sections = self.section_classifier.classify_sections(y, sr, boundaries, similarity_matrix)
 
         # Merge and denoise with enhanced processing including fade detection
-        sections = self.section_processor.post_process_sections(
-            sections, bpm=bpm, y=y, sr=sr
-        )
+        sections = self.section_processor.post_process_sections(sections, bpm=bpm, y=y, sr=sr)
 
         # Refine section labels using spectral analysis
-        sections = self.section_processor.refine_section_labels_with_spectral_analysis(
-            y, sr, sections
-        )
+        sections = self.section_processor.refine_section_labels_with_spectral_analysis(y, sr, sections)
 
         # Analyze form
         form_analysis = self.section_processor.analyze_form(sections)
@@ -125,29 +115,19 @@ class StructureAnalyzer:
         }
 
     # Convenience methods for direct access to component functionality
-    def extract_structural_features(
-        self, y: np.ndarray, sr: int
-    ) -> Dict[str, np.ndarray]:
+    def extract_structural_features(self, y: np.ndarray, sr: int) -> Dict[str, np.ndarray]:
         """Extract features for structural analysis."""
         return self.boundary_detector.extract_structural_features(y, sr)
 
-    def compute_self_similarity_matrix(
-        self, features: Dict[str, np.ndarray]
-    ) -> np.ndarray:
+    def compute_self_similarity_matrix(self, features: Dict[str, np.ndarray]) -> np.ndarray:
         """Compute self-similarity matrix from features."""
         return self.boundary_detector.compute_self_similarity_matrix(features)
 
     def detect_boundaries(
-        self,
-        similarity_matrix: np.ndarray,
-        sr: int,
-        min_segment_length: float = 12.0,
-        bpm: float = 130.0,
+        self, similarity_matrix: np.ndarray, sr: int, min_segment_length: float = 12.0, bpm: float = 130.0
     ) -> List[int]:
         """Detect structural boundaries using novelty detection."""
-        return self.boundary_detector.detect_boundaries(
-            similarity_matrix, sr, min_segment_length, bpm
-        )
+        return self.boundary_detector.detect_boundaries(similarity_matrix, sr, min_segment_length, bpm)
 
     def classify_sections(
         self, y: np.ndarray, sr: int, boundaries: List[int], bpm: float = 130.0
@@ -159,9 +139,7 @@ class StructureAnalyzer:
         """Analyze overall musical form."""
         return self.section_processor.analyze_form(sections)
 
-    def detect_repetitions(
-        self, similarity_matrix: np.ndarray, sr: int
-    ) -> List[Dict[str, Any]]:
+    def detect_repetitions(self, similarity_matrix: np.ndarray, sr: int) -> List[Dict[str, Any]]:
         """Detect repeated sections in the music."""
         return self.boundary_detector.detect_repetitions(similarity_matrix, sr)
 

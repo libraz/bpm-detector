@@ -80,7 +80,7 @@ class EffectsDetector:
         base_reverb = min(0.7, max(0.0, reverb_ratio * 1.5))
         total_reverb = base_reverb + decay_factor
 
-        return min(0.95, total_reverb)
+        return float(min(0.95, total_reverb))
 
     def _detect_distortion(self, y: np.ndarray, sr: int) -> float:
         """Detect distortion presence.
@@ -105,7 +105,7 @@ class EffectsDetector:
         if fundamental_energy == 0:
             return 0.0
 
-        distortion_ratio = harmonic_energy / fundamental_energy
+        distortion_ratio = float(harmonic_energy) / float(fundamental_energy)
 
         return min(1.0, distortion_ratio)
 
@@ -126,14 +126,12 @@ class EffectsDetector:
             return 0.0
 
         # Look for periodic variations in spectral centroid
-        centroid_variation = np.std(spectral_centroid) / (
-            np.mean(spectral_centroid) + 1e-8
-        )
+        centroid_variation = np.std(spectral_centroid) / (np.mean(spectral_centroid) + 1e-8)
 
         # Normalize to 0-1 scale
         chorus_amount = min(1.0, centroid_variation * 5.0)
 
-        return chorus_amount
+        return float(chorus_amount)
 
     def _detect_compression(self, y: np.ndarray) -> float:
         """Detect compression presence.

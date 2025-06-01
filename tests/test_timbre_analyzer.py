@@ -21,29 +21,20 @@ class TestTimbreAnalyzer(unittest.TestCase):
 
         # Bright sound (high frequencies)
         self.bright_audio = (
-            0.3 * np.sin(2 * np.pi * 440 * t)
-            + 0.4 * np.sin(2 * np.pi * 880 * t)
-            + 0.3 * np.sin(2 * np.pi * 1760 * t)
+            0.3 * np.sin(2 * np.pi * 440 * t) + 0.4 * np.sin(2 * np.pi * 880 * t) + 0.3 * np.sin(2 * np.pi * 1760 * t)
         )
 
         # Warm sound (low frequencies)
         self.warm_audio = (
-            0.5 * np.sin(2 * np.pi * 220 * t)
-            + 0.3 * np.sin(2 * np.pi * 330 * t)
-            + 0.2 * np.sin(2 * np.pi * 440 * t)
+            0.5 * np.sin(2 * np.pi * 220 * t) + 0.3 * np.sin(2 * np.pi * 330 * t) + 0.2 * np.sin(2 * np.pi * 440 * t)
         )
 
         # Rough sound (with noise)
-        self.rough_audio = 0.5 * np.sin(2 * np.pi * 440 * t) + 0.3 * np.random.randn(
-            len(t)
-        )
+        self.rough_audio = 0.5 * np.sin(2 * np.pi * 440 * t) + 0.3 * np.random.randn(len(t))
 
         # Dense sound (many harmonics)
         harmonics = [440 * (i + 1) for i in range(8)]
-        self.dense_audio = sum(
-            (0.8 / (i + 1)) * np.sin(2 * np.pi * freq * t)
-            for i, freq in enumerate(harmonics)
-        )
+        self.dense_audio = sum((0.8 / (i + 1)) * np.sin(2 * np.pi * freq * t) for i, freq in enumerate(harmonics))
 
     def test_extract_timbral_features(self):
         """Test timbral feature extraction."""
@@ -69,18 +60,12 @@ class TestTimbreAnalyzer(unittest.TestCase):
     def test_analyze_brightness(self):
         """Test brightness analysis."""
         # Extract features for bright audio
-        bright_features = self.analyzer.extract_timbral_features(
-            self.bright_audio, self.sr
-        )
-        bright_score = self.analyzer.analyze_brightness(
-            bright_features['spectral_centroid'], self.sr
-        )
+        bright_features = self.analyzer.extract_timbral_features(self.bright_audio, self.sr)
+        bright_score = self.analyzer.analyze_brightness(bright_features['spectral_centroid'], self.sr)
 
         # Extract features for warm audio
         warm_features = self.analyzer.extract_timbral_features(self.warm_audio, self.sr)
-        warm_score = self.analyzer.analyze_brightness(
-            warm_features['spectral_centroid'], self.sr
-        )
+        warm_score = self.analyzer.analyze_brightness(warm_features['spectral_centroid'], self.sr)
 
         # Brightness should be a float between 0 and 1
         self.assertIsInstance(bright_score, (int, float))
@@ -97,20 +82,12 @@ class TestTimbreAnalyzer(unittest.TestCase):
     def test_analyze_roughness(self):
         """Test roughness analysis."""
         # Extract features for rough audio
-        rough_features = self.analyzer.extract_timbral_features(
-            self.rough_audio, self.sr
-        )
-        rough_score = self.analyzer.analyze_roughness(
-            rough_features['spectral_contrast']
-        )
+        rough_features = self.analyzer.extract_timbral_features(self.rough_audio, self.sr)
+        rough_score = self.analyzer.analyze_roughness(rough_features['spectral_contrast'])
 
         # Extract features for smooth audio
-        smooth_features = self.analyzer.extract_timbral_features(
-            self.bright_audio, self.sr
-        )
-        smooth_score = self.analyzer.analyze_roughness(
-            smooth_features['spectral_contrast']
-        )
+        smooth_features = self.analyzer.extract_timbral_features(self.bright_audio, self.sr)
+        smooth_score = self.analyzer.analyze_roughness(smooth_features['spectral_contrast'])
 
         # Roughness should be a float between 0 and 1
         self.assertIsInstance(rough_score, (int, float))
@@ -131,9 +108,7 @@ class TestTimbreAnalyzer(unittest.TestCase):
         warm_score = self.analyzer.analyze_warmth(warm_features['mfcc'])
 
         # Extract features for bright audio
-        bright_features = self.analyzer.extract_timbral_features(
-            self.bright_audio, self.sr
-        )
+        bright_features = self.analyzer.extract_timbral_features(self.bright_audio, self.sr)
         bright_score = self.analyzer.analyze_warmth(bright_features['mfcc'])
 
         # Warmth should be a float between 0 and 1
@@ -151,15 +126,11 @@ class TestTimbreAnalyzer(unittest.TestCase):
     def test_analyze_density(self):
         """Test density analysis."""
         # Extract features for dense audio
-        dense_features = self.analyzer.extract_timbral_features(
-            self.dense_audio, self.sr
-        )
+        dense_features = self.analyzer.extract_timbral_features(self.dense_audio, self.sr)
         dense_score = self.analyzer.analyze_density(dense_features)
 
         # Extract features for simple audio
-        simple_features = self.analyzer.extract_timbral_features(
-            self.bright_audio, self.sr
-        )
+        simple_features = self.analyzer.extract_timbral_features(self.bright_audio, self.sr)
         simple_score = self.analyzer.analyze_density(simple_features)
 
         # Density should be a float between 0 and 1
@@ -343,12 +314,7 @@ class TestTimbreAnalyzer(unittest.TestCase):
         texture = self.analyzer.analyze_texture(features)
 
         # Check required fields
-        expected_fields = [
-            'spectral_complexity',
-            'harmonic_richness',
-            'temporal_stability',
-            'timbral_consistency',
-        ]
+        expected_fields = ['spectral_complexity', 'harmonic_richness', 'temporal_stability', 'timbral_consistency']
         for field in expected_fields:
             self.assertIn(field, texture)
             self.assertIsInstance(texture[field], (int, float))
@@ -391,9 +357,7 @@ class TestTimbreAnalyzer(unittest.TestCase):
         def progress_callback(progress, message):
             progress_calls.append((progress, message))
 
-        self.analyzer.analyze(
-            self.bright_audio, self.sr, progress_callback=progress_callback
-        )
+        self.analyzer.analyze(self.bright_audio, self.sr, progress_callback=progress_callback)
 
         # Check that progress was reported
         self.assertGreater(len(progress_calls), 0)
@@ -417,9 +381,7 @@ class TestTimbreAnalyzer(unittest.TestCase):
 
     def test_short_audio_handling(self):
         """Test handling of very short audio."""
-        short_audio = 0.5 * np.sin(
-            2 * np.pi * 440 * np.linspace(0, 0.5, int(self.sr * 0.5))
-        )
+        short_audio = 0.5 * np.sin(2 * np.pi * 440 * np.linspace(0, 0.5, int(self.sr * 0.5)))
 
         results = self.analyzer.analyze(short_audio, self.sr)
 

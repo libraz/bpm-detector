@@ -1,6 +1,6 @@
 """Instrument classification module."""
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 import librosa
 import numpy as np
@@ -87,19 +87,13 @@ class InstrumentClassifier:
                     magnitude, freqs, low_freq=low_freq, high_freq=high_freq
                 )
 
-                instruments.append(
-                    {
-                        'instrument': instrument,
-                        'confidence': confidence,
-                        'prominence': prominence,
-                    }
-                )
+                instruments.append({'instrument': instrument, 'confidence': confidence, 'prominence': prominence})
 
         # Filter redundant instruments
         instruments = self._filter_redundant_instruments(instruments)
 
         # Sort by confidence
-        instruments.sort(key=lambda x: x['confidence'], reverse=True)
+        instruments.sort(key=lambda x: float(x['confidence']), reverse=True)  # type: ignore[arg-type]
 
         return instruments
 
@@ -107,13 +101,13 @@ class InstrumentClassifier:
         self,
         magnitude: np.ndarray,
         freqs: np.ndarray,
-        freq_range: tuple = None,
-        low_freq: float = None,
-        high_freq: float = None,
-        instrument: str = None,
-        harmonic: np.ndarray = None,
-        percussive: np.ndarray = None,
-        spectral_shape=None,
+        freq_range: Optional[Tuple[float, float]] = None,
+        low_freq: Optional[float] = None,
+        high_freq: Optional[float] = None,
+        instrument: Optional[str] = None,
+        harmonic: Optional[np.ndarray] = None,
+        percussive: Optional[np.ndarray] = None,
+        spectral_shape: Optional[Any] = None,
     ) -> float:
         """Calculate confidence for instrument presence.
 
@@ -162,9 +156,7 @@ class InstrumentClassifier:
                 # Percussive instruments - check percussive component
                 try:
                     perc_energy = np.mean(np.abs(librosa.stft(percussive)))
-                    total_perc_energy = np.mean(
-                        np.abs(librosa.stft(percussive + harmonic))
-                    )
+                    total_perc_energy = np.mean(np.abs(librosa.stft(percussive + harmonic)))
 
                     if total_perc_energy > 0:
                         perc_ratio = perc_energy / total_perc_energy
@@ -183,9 +175,7 @@ class InstrumentClassifier:
                 # Harmonic instruments - check harmonic component
                 try:
                     harm_energy = np.mean(np.abs(librosa.stft(harmonic)))
-                    total_harm_energy = np.mean(
-                        np.abs(librosa.stft(harmonic + percussive))
-                    )
+                    total_harm_energy = np.mean(np.abs(librosa.stft(harmonic + percussive)))
 
                     if total_harm_energy > 0:
                         harm_ratio = harm_energy / total_harm_energy
@@ -197,15 +187,15 @@ class InstrumentClassifier:
         else:
             confidence = energy_ratio
 
-        return min(1.0, confidence * 2.5)
+        return float(min(1.0, confidence * 2.5))
 
     def _calculate_instrument_prominence(
         self,
         magnitude: np.ndarray,
         freqs: np.ndarray,
-        freq_range: tuple = None,
-        low_freq: float = None,
-        high_freq: float = None,
+        freq_range: Optional[Tuple[float, float]] = None,
+        low_freq: Optional[float] = None,
+        high_freq: Optional[float] = None,
     ) -> float:
         """Calculate instrument prominence in the mix.
 
@@ -241,11 +231,9 @@ class InstrumentClassifier:
 
         prominence = range_energy / total_energy
 
-        return min(1.0, prominence * 3.0)  # Amplify for better range
+        return float(min(1.0, prominence * 3.0))  # Amplify for better range
 
-    def _filter_redundant_instruments(
-        self, instruments: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    def _filter_redundant_instruments(self, instruments: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Filter out redundant instrument detections.
 
         Args:

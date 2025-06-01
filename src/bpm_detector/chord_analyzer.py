@@ -1,6 +1,6 @@
 """Chord progression analysis module."""
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import librosa
 import numpy as np
@@ -15,18 +15,21 @@ class ChordProgressionAnalyzer:
     CHORD_TEMPLATES: Dict[str, List[int]] = {}
 
     for i, note in enumerate(NOTE_NAMES):
+        # Major triad
         vec = [0] * 12
         vec[i] = 1
         vec[(i + 4) % 12] = 1
         vec[(i + 7) % 12] = 1
         CHORD_TEMPLATES[note] = vec
 
+        # Minor triad
         vec = [0] * 12
         vec[i] = 1
         vec[(i + 3) % 12] = 1
         vec[(i + 7) % 12] = 1
         CHORD_TEMPLATES[f"{note}m"] = vec
 
+        # Dominant 7th
         vec = [0] * 12
         vec[i] = 1
         vec[(i + 4) % 12] = 1
@@ -34,6 +37,14 @@ class ChordProgressionAnalyzer:
         vec[(i + 10) % 12] = 1
         CHORD_TEMPLATES[f"{note}7"] = vec
 
+        # Major 7th (simplified as triad for better detection)
+        vec = [0] * 12
+        vec[i] = 1
+        vec[(i + 4) % 12] = 1
+        vec[(i + 7) % 12] = 1
+        CHORD_TEMPLATES[f"{note}maj7_tri"] = vec
+
+        # Sus4
         vec = [0] * 12
         vec[i] = 1
         vec[(i + 5) % 12] = 1
@@ -106,9 +117,7 @@ class ChordProgressionAnalyzer:
 
         # Use STFT-based chroma with larger FFT for tension chord detection
         stft = librosa.stft(y_harmonic, hop_length=self.hop_length, n_fft=self.n_fft)
-        chroma = librosa.feature.chroma_stft(
-            S=np.abs(stft), sr=sr, hop_length=self.hop_length, n_chroma=12, norm=2
-        )
+        chroma = librosa.feature.chroma_stft(S=np.abs(stft), sr=sr, hop_length=self.hop_length, n_chroma=12, norm=2)
 
         # Apply 2-second moving window average for stability
         window_frames = int(2.0 * sr / self.hop_length)  # 2 seconds
@@ -135,11 +144,9 @@ class ChordProgressionAnalyzer:
             end = min(chroma.shape[1], i + half_window + 1)
             smoothed[:, i] = np.mean(chroma[:, start:end], axis=1)
 
-        return smoothed
+        return np.asarray(smoothed)
 
-    def detect_chords(
-        self, chroma: np.ndarray, bpm: float = 130.0
-    ) -> List[Tuple[str, float, int, int]]:
+    def detect_chords(self, chroma: np.ndarray, bpm: float = 130.0) -> List[Tuple[str, float, int, int]]:
         """Detect chords from chroma features with dynamic window sizing.
 
         Args:
@@ -174,19 +181,19 @@ class ChordProgressionAnalyzer:
             best_chord, confidence = self._match_chord_template(window_chroma)
 
             # Adaptive confidence threshold based on signal strength
-            signal_strength = np.max(window_chroma)
-            adaptive_threshold = max(0.4, 0.65 - (1.0 - signal_strength) * 0.2)
+            signal_strength: float = np.max(window_chroma)
+            adaptive_threshold = max(0.3, 0.55 - (1.0 - signal_strength) * 0.2)  # Lowered threshold
 
             if confidence > adaptive_threshold:
                 detected_chords.append((best_chord, confidence, i, end_frame))
 
-        # Merge consecutive identical chords
-        chords = self._merge_consecutive_chords(detected_chords)
+        # Very relaxed merging to preserve chord diversity
+        chords = self._merge_consecutive_chords(detected_chords, 0.50)  # Very relaxed threshold
 
         return chords
 
     def _match_chord_template(self, chroma_frame: np.ndarray) -> Tuple[str, float]:
-        """Match chroma frame to chord templates with improved root detection.
+        """Match chroma frame to chord templates with improved triad/tetrad separation.
 
         Args:
             chroma_frame: Single chroma vector
@@ -194,29 +201,23 @@ class ChordProgressionAnalyzer:
         Returns:
             (best_chord_name, confidence)
         """
-        # Enhanced chord detection with 3-note clustering
+        # Enhanced chord detection with triad/tetrad prioritization
         best_chord = 'N'  # No chord
         best_score = 0.0
 
-        # Find the top 3 strongest notes for clustering
-        top_3_indices = np.argsort(chroma_frame)[-3:]
-        top_3_strengths = chroma_frame[top_3_indices]
+        # Find the top 4 strongest notes for analysis
+        top_4_indices = np.argsort(chroma_frame)[-4:]
+        top_4_strengths = chroma_frame[top_4_indices]
 
         # Only proceed if we have significant energy in top notes
-        if np.max(top_3_strengths) < 0.1:
+        if np.max(top_4_strengths) < 0.1:
             return 'N', 0.0
 
-        # Try to identify chord based on top 3 notes
-        cluster_chord = self._identify_chord_from_cluster(
-            top_3_indices, top_3_strengths
-        )
-        if cluster_chord:
-            cluster_score = np.mean(top_3_strengths)
-            if cluster_score > best_score:
-                best_score = cluster_score
-                best_chord = cluster_chord
+        # Separate triads and tetrads for better detection
+        triad_candidates = []
+        tetrad_candidates = []
 
-        # Also try template matching for comparison
+        # Template matching with triad/tetrad separation
         for chord_name, template in self.CHORD_TEMPLATES.items():
             template = np.array(template, dtype=np.float32)
 
@@ -225,9 +226,7 @@ class ChordProgressionAnalyzer:
             template_norm = np.linalg.norm(template)
 
             if chroma_norm > 1e-8 and template_norm > 1e-8:
-                correlation = np.dot(chroma_frame, template) / (
-                    chroma_norm * template_norm
-                )
+                correlation = np.dot(chroma_frame, template) / (chroma_norm * template_norm)
             else:
                 correlation = 0.0
 
@@ -235,15 +234,34 @@ class ChordProgressionAnalyzer:
             if np.isnan(correlation):
                 correlation = 0.0
 
-            if correlation > best_score:
-                best_score = correlation
-                best_chord = chord_name
+            # Categorize by chord type
+            if '7' in chord_name or 'sus' in chord_name:
+                tetrad_candidates.append((chord_name, correlation))
+            else:
+                triad_candidates.append((chord_name, correlation))
+
+        # Prioritize triads unless tetrad has significantly higher confidence
+        best_triad = max(triad_candidates, key=lambda x: x[1]) if triad_candidates else ('N', 0.0)
+        best_tetrad = max(tetrad_candidates, key=lambda x: x[1]) if tetrad_candidates else ('N', 0.0)
+
+        # Use tetrad only if it's significantly better than triad (threshold: 0.05)
+        if best_tetrad[1] > best_triad[1] + 0.05:  # Further relaxed threshold
+            best_chord, best_score = best_tetrad
+        else:
+            best_chord, best_score = best_triad
+
+        # Also try cluster-based detection for comparison
+        cluster_chord = self._identify_chord_from_cluster(top_4_indices[:3], top_4_strengths[:3])
+        if cluster_chord is not None:
+            cluster_score = np.mean(top_4_strengths[:3])
+            # Only use cluster result if it's competitive
+            if cluster_score > best_score * 0.8:
+                best_score = float(cluster_score)
+                best_chord = cluster_chord
 
         return best_chord, max(0.0, best_score)
 
-    def _identify_chord_from_cluster(
-        self, note_indices: np.ndarray, strengths: np.ndarray
-    ) -> str:
+    def _identify_chord_from_cluster(self, note_indices: np.ndarray, strengths: np.ndarray) -> Optional[str]:
         """Identify chord from top 3 notes using music theory.
 
         Args:
@@ -266,51 +284,26 @@ class ChordProgressionAnalyzer:
             fifth = (root_idx + 7) % 12
 
             if major_third in note_indices and fifth in note_indices:
-                note_names = [
-                    'C',
-                    'C#',
-                    'D',
-                    'D#',
-                    'E',
-                    'F',
-                    'F#',
-                    'G',
-                    'G#',
-                    'A',
-                    'A#',
-                    'B',
-                ]
-                return note_names[root_idx]
+                note_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+                return str(note_names[root_idx])
 
             # Check for minor triad (root, minor third, fifth)
             minor_third = (root_idx + 3) % 12
 
             if minor_third in note_indices and fifth in note_indices:
-                note_names = [
-                    'C',
-                    'C#',
-                    'D',
-                    'D#',
-                    'E',
-                    'F',
-                    'F#',
-                    'G',
-                    'G#',
-                    'A',
-                    'A#',
-                    'B',
-                ]
-                return note_names[root_idx] + 'm'
+                note_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+                return str(note_names[root_idx]) + 'm'
 
         return None
 
     def _merge_consecutive_chords(
-        self, chords: List[Tuple[str, float, int, int]]
+        self, chords: List[Tuple[str, float, int, int]], merge_threshold: float = 0.6
     ) -> List[Tuple[str, float, int, int]]:
-        """Merge consecutive identical chords.
+        """Merge consecutive identical chords with configurable threshold.
 
         Args:
             chords: List of detected chords
+            merge_threshold: Confidence threshold for merging (higher = less merging)
 
         Returns:
             Merged chord list
@@ -324,11 +317,14 @@ class ChordProgressionAnalyzer:
         for i in range(1, len(chords)):
             next_chord = chords[i]
 
-            # If same chord and overlapping/adjacent frames
-            if (
+            # More restrictive merging: only merge if confidence is high enough
+            should_merge = (
                 current_chord[0] == next_chord[0]
                 and next_chord[2] <= current_chord[3] + self.hop_length
-            ):
+                and min(current_chord[1], next_chord[1]) > merge_threshold
+            )
+
+            if should_merge:
                 # Extend current chord
                 current_chord = (
                     current_chord[0],
@@ -337,7 +333,7 @@ class ChordProgressionAnalyzer:
                     max(current_chord[3], next_chord[3]),  # Extend end frame
                 )
             else:
-                # Different chord, add current and start new
+                # Different chord or low confidence, add current and start new
                 merged.append(current_chord)
                 current_chord = next_chord
 
@@ -346,9 +342,7 @@ class ChordProgressionAnalyzer:
 
         return merged
 
-    def analyze_progression(
-        self, chords: List[Tuple[str, float, int, int]]
-    ) -> Dict[str, Any]:
+    def analyze_progression(self, chords: List[Tuple[str, float, int, int]]) -> Dict[str, Any]:
         """Analyze chord progression patterns.
 
         Args:
@@ -388,8 +382,7 @@ class ChordProgressionAnalyzer:
         # Calculate harmonic rhythm (chord changes per second)
         total_duration = sum(chord[3] - chord[2] for chord in chords)
         harmonic_rhythm = (
-            len([c for c in chords if c[0] != 'N'])
-            / (total_duration * self.hop_length / 22050)
+            len([c for c in chords if c[0] != 'N']) / (total_duration * self.hop_length / 22050)
             if total_duration > 0
             else 0
         )
@@ -399,13 +392,7 @@ class ChordProgressionAnalyzer:
         chord_complexity = min(1.0, unique_chords / 12.0)  # Normalize to 0-1
 
         # Count chord changes
-        chord_changes = len(
-            [
-                i
-                for i in range(1, len(chord_names))
-                if chord_names[i] != chord_names[i - 1]
-            ]
-        )
+        chord_changes = len([i for i in range(1, len(chord_names)) if chord_names[i] != chord_names[i - 1]])
 
         return {
             'main_progression': main_progression,
@@ -416,10 +403,8 @@ class ChordProgressionAnalyzer:
             'chord_changes': chord_changes,
         }
 
-    def _find_main_progression(
-        self, chord_names: List[str], pattern_length: int = 4
-    ) -> List[str]:
-        """Find the most common chord progression pattern.
+    def _find_main_progression(self, chord_names: List[str], pattern_length: int = 4) -> List[str]:
+        """Find the most common chord progression pattern with improved diversity.
 
         Args:
             chord_names: List of chord names
@@ -432,16 +417,35 @@ class ChordProgressionAnalyzer:
             return chord_names[:4] if len(chord_names) >= 4 else chord_names
 
         # Count all possible patterns of given length
-        pattern_counts = {}
+        pattern_counts: Dict[Tuple[str, ...], int] = {}
 
         for i in range(len(chord_names) - pattern_length + 1):
             pattern = tuple(chord_names[i : i + pattern_length])
             pattern_counts[pattern] = pattern_counts.get(pattern, 0) + 1
 
         if pattern_counts:
-            # Return most common pattern
-            most_common = max(pattern_counts.items(), key=lambda x: x[1])
-            return list(most_common[0])
+            # Strongly prioritize diverse patterns over repetitive ones
+            diverse_patterns = {}
+            for pattern, count in pattern_counts.items():
+                unique_chords = len(set(pattern))
+                # Moderate preference for diverse patterns
+                if unique_chords >= 3:
+                    diversity_bonus = unique_chords * 2  # Moderate diversity bonus
+                    diverse_patterns[pattern] = count + diversity_bonus
+                elif unique_chords == 2:
+                    diversity_bonus = unique_chords * 2  # Equal bonus
+                    diverse_patterns[pattern] = count + diversity_bonus
+                elif unique_chords == 1:
+                    # Heavily penalize single-chord patterns
+                    diverse_patterns[pattern] = int(count * 0.01)
+
+            # Use diverse patterns if available, otherwise fall back to original
+            if diverse_patterns:
+                most_common = max(diverse_patterns.items(), key=lambda x: x[1])
+                return list(most_common[0])
+            else:
+                most_common = max(pattern_counts.items(), key=lambda x: x[1])
+                return list(most_common[0])
 
         return chord_names[:pattern_length]
 
@@ -542,7 +546,7 @@ class ChordProgressionAnalyzer:
         Returns:
             List of detected modulations
         """
-        modulations = []
+        modulations: List[Dict[str, Any]] = []
 
         if len(chords) < 8:  # Need sufficient chords to detect modulation
             return modulations
@@ -577,7 +581,7 @@ class ChordProgressionAnalyzer:
 
         return modulations
 
-    def _detect_local_key(self, chord_names: List[str]) -> str:
+    def _detect_local_key(self, chord_names: List[str]) -> Optional[str]:
         """Detect the key of a local chord progression.
 
         Args:
@@ -591,21 +595,21 @@ class ChordProgressionAnalyzer:
 
         major_keys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
-        best_key = None
-        best_score = 0
+        best_key: Optional[str] = None
+        best_score: float = 0.0
 
         # Test each possible key
         for key_root in major_keys:
             # Test major key
             score = self._score_key_fit(chord_names, key_root, 'major')
             if score > best_score:
-                best_score = score
+                best_score = float(score)
                 best_key = f"{key_root} Major"
 
             # Test minor key
             score = self._score_key_fit(chord_names, key_root, 'minor')
             if score > best_score:
-                best_score = score
+                best_score = float(score)
                 best_key = f"{key_root} Minor"
 
         return best_key if best_score > 0.5 else None
@@ -631,23 +635,17 @@ class ChordProgressionAnalyzer:
             scale_chords = ['i', 'ii°', 'III', 'iv', 'V', 'VI', 'VII']
 
         # Convert chords to roman numerals for this key
-        roman_numerals = self.functional_analysis(
-            chord_names, f"{key_root} {mode.title()}"
-        )
+        roman_numerals = self.functional_analysis(chord_names, f"{key_root} {mode.title()}")
 
         # Count how many chords fit the key
         fitting_chords = 0
         for roman in roman_numerals:
-            if roman in scale_chords or roman.lower() in [
-                c.lower() for c in scale_chords
-            ]:
+            if roman in scale_chords or roman.lower() in [c.lower() for c in scale_chords]:
                 fitting_chords += 1
 
         return fitting_chords / len(chord_names) if chord_names else 0.0
 
-    def analyze(
-        self, y: np.ndarray, sr: int, key: str = None, bpm: float = 130.0
-    ) -> Dict[str, Any]:
+    def analyze(self, y: np.ndarray, sr: int, key: Optional[str] = None, bpm: float = 130.0) -> Dict[str, Any]:
         """Perform complete chord progression analysis.
 
         Args:
@@ -681,9 +679,7 @@ class ChordProgressionAnalyzer:
 
         # Calculate substitute chord ratio
         chord_names = [c[0] for c in chords if c[0] != 'N']
-        substitute_ratio = (
-            self._calculate_substitute_ratio(chord_names, key) if key else 0.0
-        )
+        substitute_ratio = self._calculate_substitute_ratio(chord_names, key) if key else 0.0
 
         return {
             'chords': chords,
@@ -716,10 +712,7 @@ class ChordProgressionAnalyzer:
 
         for chord in chord_names:
             # Look for chord extensions/alterations
-            if any(
-                ext in chord
-                for ext in ['7', '9', '11', '13', 'sus', 'add', 'dim', 'aug']
-            ):
+            if any(ext in chord for ext in ['7', '9', '11', '13', 'sus', 'add', 'dim', 'aug']):
                 substitute_count += 1
 
         return substitute_count / len(chord_names) if chord_names else 0.0

@@ -82,9 +82,7 @@ class TestSectionAnalyzer(unittest.TestCase):
             'mfcc': np.random.randn(13, 3),
         }
 
-        subtype = self.analyzer.classify_instrumental_subtype(
-            instrumental_section, spectral_features
-        )
+        subtype = self.analyzer.classify_instrumental_subtype(instrumental_section, spectral_features)
 
         # Should return a valid subtype
         self.assertIsInstance(subtype, str)
@@ -96,23 +94,11 @@ class TestSectionAnalyzer(unittest.TestCase):
         # Create sections with potential outro at the end
         test_sections = [
             {'start_time': 0.0, 'end_time': 30.0, 'type': 'verse', 'energy_level': 0.5},
-            {
-                'start_time': 30.0,
-                'end_time': 45.0,
-                'type': 'chorus',
-                'energy_level': 0.8,
-            },
-            {
-                'start_time': 45.0,
-                'end_time': 50.0,
-                'type': 'verse',
-                'energy_level': 0.3,
-            },  # Potential outro
+            {'start_time': 30.0, 'end_time': 45.0, 'type': 'chorus', 'energy_level': 0.8},
+            {'start_time': 45.0, 'end_time': 50.0, 'type': 'verse', 'energy_level': 0.3},  # Potential outro
         ]
 
-        enhanced = self.analyzer.enhance_outro_detection(
-            test_sections, self.test_audio, self.sr
-        )
+        enhanced = self.analyzer.enhance_outro_detection(test_sections, self.test_audio, self.sr)
 
         # Should preserve structure
         self.assertIsInstance(enhanced, list)
@@ -137,9 +123,7 @@ class TestSectionAnalyzer(unittest.TestCase):
         """Test harmonic resolution detection."""
         test_section = {'start_time': 40.0, 'end_time': 50.0}
 
-        has_resolution = self.analyzer.detect_harmonic_resolution(
-            test_section, self.test_audio, self.sr
-        )
+        has_resolution = self.analyzer.detect_harmonic_resolution(test_section, self.test_audio, self.sr)
 
         # Should return a boolean
         self.assertIsInstance(has_resolution, bool)
@@ -184,12 +168,7 @@ class TestSectionAnalyzer(unittest.TestCase):
         form_analysis = self.analyzer.analyze_form(self.test_sections)
 
         # Check required fields
-        required_fields = [
-            'form',
-            'section_count',
-            'total_duration',
-            'structure_complexity',
-        ]
+        required_fields = ['form', 'section_count', 'total_duration', 'structure_complexity']
         for field in required_fields:
             self.assertIn(field, form_analysis)
 
@@ -240,9 +219,7 @@ class TestSectionAnalyzer(unittest.TestCase):
             {'type': 'verse', 'start_time': 60, 'end_time': 90},
             {'type': 'chorus', 'start_time': 90, 'end_time': 120},
         ]
-        simple_complexity = self.analyzer._calculate_structural_complexity(
-            simple_sections
-        )
+        simple_complexity = self.analyzer._calculate_structural_complexity(simple_sections)
 
         # Complex structure should have higher complexity
         self.assertGreaterEqual(complexity, simple_complexity)
@@ -297,9 +274,7 @@ class TestSectionAnalyzer(unittest.TestCase):
         }
 
         # Should handle list format gracefully
-        subtype = self.analyzer.classify_instrumental_subtype(
-            section_with_list_characteristics
-        )
+        subtype = self.analyzer.classify_instrumental_subtype(section_with_list_characteristics)
         self.assertIsInstance(subtype, str)
         valid_subtypes = ['solo', 'breakdown', 'buildup', 'interlude']
         self.assertIn(subtype, valid_subtypes)

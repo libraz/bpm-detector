@@ -1,6 +1,6 @@
 """Key profiles and hint mapping for key detection."""
 
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -10,20 +10,12 @@ from .music_theory import NOTE_NAMES
 class _Constants:
     """Key detection constants with clear documentation."""
 
-    SEP_BOOST = (
-        0.80  # Confidence boost factor (0-1) for separation between top candidates
-    )
-    REL_SWITCH_THRESH = (
-        0.10  # Correlation difference threshold (0-1) for relative key switching
-    )
+    SEP_BOOST = 0.80  # Confidence boost factor (0-1) for separation between top candidates
+    REL_SWITCH_THRESH = 0.10  # Correlation difference threshold (0-1) for relative key switching
     JPOP_CONF_THRESH = 0.25  # Minimum confidence (0-1) for J-Pop specific detection
-    MIN_CONFIDENCE = 0.02  # Global minimum confidence (0-1) to avoid 'None' results (lowered for better detection)
-    PATTERN_THRESH = (
-        0.15  # Pattern strength threshold (0-1) for G# minor specific detection
-    )
-    CHORD_WEIGHT_THRESH = (
-        0.50  # Minimum confidence (0-1) for chord-driven key re-estimation
-    )
+    MIN_CONFIDENCE = 0.15  # Global minimum confidence (0-1) to avoid 'Unknown' results (adjusted per report)
+    PATTERN_THRESH = 0.15  # Pattern strength threshold (0-1) for G# minor specific detection
+    CHORD_WEIGHT_THRESH = 0.50  # Minimum confidence (0-1) for chord-driven key re-estimation
 
     # Profile enhancement constants
     TONIC_BOOST = 1.1  # Boost factor for tonic in minor profile
@@ -37,10 +29,10 @@ class KeyProfileBuilder:
 
     @staticmethod
     def build_profiles(
-        tonic_boost: float = None,
-        minor_third_boost: float = None,
-        fifth_boost: float = None,
-        minor_seventh_boost: float = None,
+        tonic_boost: Optional[float] = None,
+        minor_third_boost: Optional[float] = None,
+        fifth_boost: Optional[float] = None,
+        minor_seventh_boost: Optional[float] = None,
         profile_type: str = 'krumhansl',
     ) -> List[np.ndarray]:
         """Build enhanced Krumhansl-Schmuckler key profiles for modern pop music.
@@ -63,12 +55,8 @@ class KeyProfileBuilder:
 
         # Enhanced Krumhansl-Schmuckler key profiles for modern pop music
         # Adjusted for better discrimination between keys
-        major_profile = np.array(
-            [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88]
-        )
-        minor_profile = np.array(
-            [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17]
-        )
+        major_profile = np.array([6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88])
+        minor_profile = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17])
 
         # Enhance tonic prominence for better key detection
         major_profile[0] *= 1.5  # Boost tonic
@@ -81,20 +69,7 @@ class KeyProfileBuilder:
 
         # Enhanced minor profile using parameterized boosts
         boost_factors = np.array(
-            [
-                tonic_boost - 1,
-                0,
-                0,
-                minor_third_boost - 1,
-                0,
-                0,
-                0,
-                fifth_boost - 1,
-                0,
-                0,
-                minor_seventh_boost - 1,
-                0,
-            ]
+            [tonic_boost - 1, 0, 0, minor_third_boost - 1, 0, 0, 0, fifth_boost - 1, 0, 0, minor_seventh_boost - 1, 0]
         )
         minor_profile = minor_profile * (1 + boost_factors)
 
@@ -105,9 +80,9 @@ class KeyProfileBuilder:
         # Create list of 24 profiles for test compatibility
         profiles = []
         for i in range(12):
-            # Add major profile for each key (copy() でブーストにじみを防ぐ)
+            # Add major profile for each key (copy() prevents boost bleeding)
             profiles.append(np.roll(major_profile, i).copy())
-            # Add minor profile for each key (copy() でブーストにじみを防ぐ)
+            # Add minor profile for each key (copy() prevents boost bleeding)
             profiles.append(np.roll(minor_profile, i).copy())
 
         return profiles
@@ -166,11 +141,7 @@ class KeyHintMapper:
 
     @staticmethod
     def apply_external_key_hint(
-        hint: str,
-        current_key: str,
-        current_mode: str,
-        current_confidence: float,
-        hint_map: Dict[str, Tuple[str, str]],
+        hint: str, current_key: str, current_mode: str, current_confidence: float, hint_map: Dict[str, Tuple[str, str]]
     ) -> Tuple[str, str, float]:
         """Apply external key hint with normalized comparison.
 
@@ -201,11 +172,7 @@ class KeyHintMapper:
             # Handle ambiguous 'm' suffix carefully
             if norm_hint == f"{note_lower}m":
                 # Default to minor for single 'm' suffix unless it's a known major pattern
-                if note_lower not in {
-                    "c",
-                    "d#",
-                    "g#",
-                }:  # Avoid conflicts with predefined patterns
+                if note_lower not in {"c", "d#", "g#"}:  # Avoid conflicts with predefined patterns
                     return note, "Minor", max(current_confidence, 0.7)
 
             if norm_hint in major_patterns:

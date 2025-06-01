@@ -1,7 +1,6 @@
 """Tests for harmony analyzer module."""
 
 import unittest
-from unittest.mock import MagicMock, patch
 
 import numpy as np
 
@@ -48,25 +47,17 @@ class TestHarmonyAnalyzer(unittest.TestCase):
 
         # Test with custom parameters
         custom_consonance = {0: 1.0, 7: 0.8, 4: 0.7}
-        custom_analyzer = HarmonyAnalyzer(
-            hop_length=256, consonance_ratings=custom_consonance
-        )
+        custom_analyzer = HarmonyAnalyzer(hop_length=256, consonance_ratings=custom_consonance)
         self.assertEqual(custom_analyzer.hop_length, 256)
         self.assertEqual(custom_analyzer.consonance_ratings, custom_consonance)
 
     def test_analyze_harmony_complexity(self):
         """Test harmony complexity analysis."""
         # Test with harmonic audio
-        harmonic_complexity = self.analyzer.analyze_harmony_complexity(
-            self.harmonic_audio, self.sr
-        )
+        harmonic_complexity = self.analyzer.analyze_harmony_complexity(self.harmonic_audio, self.sr)
 
         # Check required fields
-        expected_fields = [
-            'harmonic_complexity',
-            'spectral_entropy',
-            'harmonic_change_rate',
-        ]
+        expected_fields = ['harmonic_complexity', 'spectral_entropy', 'harmonic_change_rate']
         for field in expected_fields:
             self.assertIn(field, harmonic_complexity)
             self.assertIsInstance(harmonic_complexity[field], (int, float))
@@ -74,29 +65,18 @@ class TestHarmonyAnalyzer(unittest.TestCase):
             self.assertLessEqual(harmonic_complexity[field], 1.0)
 
         # Test with simple audio
-        simple_complexity = self.analyzer.analyze_harmony_complexity(
-            self.simple_audio, self.sr
-        )
+        simple_complexity = self.analyzer.analyze_harmony_complexity(self.simple_audio, self.sr)
 
         # Harmonic audio should have higher complexity than simple sine wave
-        self.assertGreater(
-            harmonic_complexity['harmonic_complexity'],
-            simple_complexity['harmonic_complexity'],
-        )
+        self.assertGreater(harmonic_complexity['harmonic_complexity'], simple_complexity['harmonic_complexity'])
 
     def test_analyze_consonance(self):
         """Test consonance analysis."""
         # Test with consonant harmonic audio
-        consonant_analysis = self.analyzer.analyze_consonance(
-            self.harmonic_audio, self.sr
-        )
+        consonant_analysis = self.analyzer.analyze_consonance(self.harmonic_audio, self.sr)
 
         # Check required fields
-        expected_fields = [
-            'consonance_score',
-            'dissonance_score',
-            'interval_consonance',
-        ]
+        expected_fields = ['consonance_score', 'dissonance_score', 'interval_consonance']
         for field in expected_fields:
             self.assertIn(field, consonant_analysis)
             self.assertIsInstance(consonant_analysis[field], (int, float))
@@ -104,21 +84,13 @@ class TestHarmonyAnalyzer(unittest.TestCase):
             self.assertLessEqual(consonant_analysis[field], 1.0)
 
         # Test with dissonant audio
-        dissonant_analysis = self.analyzer.analyze_consonance(
-            self.dissonant_audio, self.sr
-        )
+        dissonant_analysis = self.analyzer.analyze_consonance(self.dissonant_audio, self.sr)
 
         # Consonant audio should have higher consonance score
-        self.assertGreater(
-            consonant_analysis['consonance_score'],
-            dissonant_analysis['consonance_score'],
-        )
+        self.assertGreater(consonant_analysis['consonance_score'], dissonant_analysis['consonance_score'])
 
         # Dissonant audio should have higher dissonance score
-        self.assertGreater(
-            dissonant_analysis['dissonance_score'],
-            consonant_analysis['dissonance_score'],
-        )
+        self.assertGreater(dissonant_analysis['dissonance_score'], consonant_analysis['dissonance_score'])
 
     def test_analyze_harmonic_rhythm(self):
         """Test harmonic rhythm analysis."""
@@ -146,9 +118,7 @@ class TestHarmonyAnalyzer(unittest.TestCase):
 
         changing_harmony = chord1 + chord2
 
-        harmonic_rhythm = self.analyzer.analyze_harmonic_rhythm(
-            changing_harmony, self.sr
-        )
+        harmonic_rhythm = self.analyzer.analyze_harmonic_rhythm(changing_harmony, self.sr)
 
         # Check required fields
         expected_fields = ['harmonic_rhythm', 'chord_change_rate', 'harmonic_stability']
@@ -158,14 +128,10 @@ class TestHarmonyAnalyzer(unittest.TestCase):
             self.assertGreaterEqual(harmonic_rhythm[field], 0.0)
 
         # Test with static harmony
-        static_rhythm = self.analyzer.analyze_harmonic_rhythm(
-            self.harmonic_audio, self.sr
-        )
+        static_rhythm = self.analyzer.analyze_harmonic_rhythm(self.harmonic_audio, self.sr)
 
         # Changing harmony should have higher change rate
-        self.assertGreater(
-            harmonic_rhythm['chord_change_rate'], static_rhythm['chord_change_rate']
-        )
+        self.assertGreater(harmonic_rhythm['chord_change_rate'], static_rhythm['chord_change_rate'])
 
     def test_consonance_ratings_effect(self):
         """Test effect of different consonance ratings."""
@@ -181,9 +147,7 @@ class TestHarmonyAnalyzer(unittest.TestCase):
         low_consonance = low_analyzer.analyze_consonance(self.harmonic_audio, self.sr)
 
         # High consonance ratings should result in higher consonance scores
-        self.assertGreater(
-            high_consonance['consonance_score'], low_consonance['consonance_score']
-        )
+        self.assertGreater(high_consonance['consonance_score'], low_consonance['consonance_score'])
 
     def test_empty_audio_handling(self):
         """Test handling of empty audio."""
@@ -226,9 +190,7 @@ class TestHarmonyAnalyzer(unittest.TestCase):
         """Test handling of silent audio."""
         silent_audio = np.zeros(self.sr * 2)
 
-        silence_analysis = self.analyzer.analyze_harmony_complexity(
-            silent_audio, self.sr
-        )
+        silence_analysis = self.analyzer.analyze_harmony_complexity(silent_audio, self.sr)
 
         # Should handle silence gracefully
         self.assertIsInstance(silence_analysis, dict)
@@ -240,15 +202,11 @@ class TestHarmonyAnalyzer(unittest.TestCase):
         """Test analyzer with different hop lengths."""
         # Test with smaller hop length
         small_hop_analyzer = HarmonyAnalyzer(hop_length=256)
-        small_hop_result = small_hop_analyzer.analyze_harmony_complexity(
-            self.harmonic_audio, self.sr
-        )
+        small_hop_result = small_hop_analyzer.analyze_harmony_complexity(self.harmonic_audio, self.sr)
 
         # Test with larger hop length
         large_hop_analyzer = HarmonyAnalyzer(hop_length=1024)
-        large_hop_result = large_hop_analyzer.analyze_harmony_complexity(
-            self.harmonic_audio, self.sr
-        )
+        large_hop_result = large_hop_analyzer.analyze_harmony_complexity(self.harmonic_audio, self.sr)
 
         # Both should produce valid results
         self.assertIsInstance(small_hop_result, dict)
@@ -301,9 +259,7 @@ class TestHarmonyAnalyzer(unittest.TestCase):
 
         # Should detect harmonic changes
         self.assertGreater(harmonic_rhythm['chord_change_rate'], 0.5)
-        self.assertLess(
-            harmonic_rhythm['harmonic_stability'], 0.99
-        )  # More realistic threshold
+        self.assertLess(harmonic_rhythm['harmonic_stability'], 0.99)  # More realistic threshold
 
     def test_interval_consonance_calculation(self):
         """Test interval consonance calculation."""
@@ -313,9 +269,7 @@ class TestHarmonyAnalyzer(unittest.TestCase):
         )  # 3:2 ratio
 
         # Create tritone (dissonant)
-        tritone_audio = np.sin(
-            2 * np.pi * 440 * np.linspace(0, 2, self.sr * 2)
-        ) + np.sin(
+        tritone_audio = np.sin(2 * np.pi * 440 * np.linspace(0, 2, self.sr * 2)) + np.sin(
             2 * np.pi * 622 * np.linspace(0, 2, self.sr * 2)
         )  # Tritone
 
@@ -323,10 +277,7 @@ class TestHarmonyAnalyzer(unittest.TestCase):
         tritone_consonance = self.analyzer.analyze_consonance(tritone_audio, self.sr)
 
         # Perfect fifth should be more consonant than tritone
-        self.assertGreater(
-            fifth_consonance['interval_consonance'],
-            tritone_consonance['interval_consonance'],
-        )
+        self.assertGreater(fifth_consonance['interval_consonance'], tritone_consonance['interval_consonance'])
 
 
 if __name__ == '__main__':

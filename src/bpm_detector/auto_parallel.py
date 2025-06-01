@@ -49,7 +49,7 @@ class AutoParallelConfig:
             cpu_usage = psutil.cpu_percent(interval=0.1)
             memory_usage = psutil.virtual_memory().percent
         except Exception:
-            # エラーハンドリング：安全なデフォルト値を返す
+            # Error handling: return safe default values
             return ParallelConfig(
                 enable_parallel=False,
                 max_workers=1,
@@ -67,9 +67,7 @@ class AutoParallelConfig:
             config.use_process_pool = True  # Expected by tests
             # Use up to 30% of physical memory for better performance
             max_memory_mb = int(available_memory * 0.3 * 1024)  # 30% of physical memory
-            config.memory_limit_mb = max(
-                6144, max_memory_mb
-            )  # At least 6GB, up to 30% of RAM
+            config.memory_limit_mb = max(6144, max_memory_mb)  # At least 6GB, up to 30% of RAM
             config.strategy = ParallelStrategy.AGGRESSIVE_PARALLEL
             config.reason = f'High-performance system detected ({logical_cores} cores, {max_memory_mb}MB memory limit)'
 
@@ -79,11 +77,11 @@ class AutoParallelConfig:
                 config.enable_parallel = True
                 config.max_workers = min(logical_cores, 8)  # Use all cores
                 config.use_process_pool = False  # Use ThreadPool
-                config.memory_limit_mb = min(
-                    int(available_memory * 0.4 * 1024), 2048
-                )  # More memory
+                config.memory_limit_mb = min(int(available_memory * 0.4 * 1024), 2048)  # More memory
                 config.strategy = ParallelStrategy.BALANCED_PARALLEL
-                config.reason = f'Medium-performance system with acceptable load ({logical_cores} cores, CPU: {cpu_usage}%)'
+                config.reason = (
+                    f'Medium-performance system with acceptable load ' f'({logical_cores} cores, CPU: {cpu_usage}%)'
+                )
             else:
                 # Still enable conservative parallel even under higher load
                 config.enable_parallel = True
@@ -91,13 +89,14 @@ class AutoParallelConfig:
                 config.use_process_pool = False
                 config.memory_limit_mb = 1024
                 config.strategy = ParallelStrategy.CONSERVATIVE_PARALLEL
-                config.reason = f'Medium-performance system with high load, using conservative parallel (CPU: {cpu_usage}%, Memory: {memory_usage}%)'
+                config.reason = (
+                    f'Medium-performance system with high load, using conservative parallel '
+                    f'(CPU: {cpu_usage}%, Memory: {memory_usage}%)'
+                )
 
         elif logical_cores >= 2:
             # Low-performance system (2-3 cores)
-            if (
-                cpu_usage < 40 and memory_usage < 70 and available_memory > 1.5
-            ):  # More lenient
+            if cpu_usage < 40 and memory_usage < 70 and available_memory > 1.5:  # More lenient
                 config.enable_parallel = True
                 config.max_workers = min(logical_cores, 3)
                 config.use_process_pool = False
@@ -106,9 +105,7 @@ class AutoParallelConfig:
                 config.reason = f'Low-performance system with acceptable load ({logical_cores} cores)'
             else:
                 config.strategy = ParallelStrategy.SEQUENTIAL_ONLY
-                config.reason = (
-                    'Low-performance system, sequential processing recommended'
-                )
+                config.reason = 'Low-performance system, sequential processing recommended'
         else:
             # Single-core system
             config.strategy = ParallelStrategy.SEQUENTIAL_ONLY
@@ -117,9 +114,7 @@ class AutoParallelConfig:
         return config
 
     @staticmethod
-    def get_file_count_adjustment(
-        file_count: int, base_config: ParallelConfig
-    ) -> ParallelConfig:
+    def get_file_count_adjustment(file_count: int, base_config: ParallelConfig) -> ParallelConfig:
         """Adjust configuration based on file count."""
         config = ParallelConfig(
             enable_parallel=base_config.enable_parallel,
@@ -180,8 +175,8 @@ class SystemMonitor:
         """Load monitoring loop."""
         while self.monitoring:
             self.current_load = {
-                'cpu': psutil.cpu_percent(interval=1),
-                'memory': psutil.virtual_memory().percent,
+                'cpu': int(psutil.cpu_percent(interval=1)),
+                'memory': int(psutil.virtual_memory().percent),
             }
             time.sleep(self.check_interval)
 
@@ -289,10 +284,7 @@ class PerformanceProfiler:
 
     def should_adjust_parallelism(self, task_name: str) -> Optional[str]:
         """Determine if parallelism should be adjusted based on performance."""
-        if (
-            task_name not in self.execution_times
-            or len(self.execution_times[task_name]) < 3
-        ):
+        if task_name not in self.execution_times or len(self.execution_times[task_name]) < 3:
             return None
 
         times = self.execution_times[task_name]

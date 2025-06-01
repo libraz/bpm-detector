@@ -19,10 +19,8 @@ class TestChordProgressionAnalyzer(unittest.TestCase):
         chroma_mean[7] = 0.6  # G
 
         # Test validation
-        validated_key, validated_mode, confidence = (
-            ChordProgressionAnalyzer.validate_key_with_chord_analysis(
-                chroma_mean, 'C', 'Major', 0.8
-            )
+        validated_key, validated_mode, confidence = ChordProgressionAnalyzer.validate_key_with_chord_analysis(
+            chroma_mean, 'C', 'Major', 0.8
         )
 
         # Should return validated results
@@ -42,9 +40,7 @@ class TestChordProgressionAnalyzer(unittest.TestCase):
         chroma_mean[4] = 0.8  # E
         chroma_mean[7] = 0.6  # G
 
-        key, mode, confidence = ChordProgressionAnalyzer.chord_driven_key_estimation(
-            chroma_mean
-        )
+        key, mode, confidence = ChordProgressionAnalyzer.chord_driven_key_estimation(chroma_mean)
 
         # Should return estimation results
         self.assertIsInstance(key, str)
@@ -63,9 +59,7 @@ class TestChordProgressionAnalyzer(unittest.TestCase):
         chroma_mean[3] = 0.8  # Minor third
         chroma_mean[7] = 0.6  # Perfect fifth
 
-        minor_score = ChordProgressionAnalyzer._analyze_minor_chord_progression(
-            chroma_mean, 0
-        )
+        minor_score = ChordProgressionAnalyzer._analyze_minor_chord_progression(chroma_mean, 0)
 
         self.assertIsInstance(minor_score, (int, float))
         self.assertGreaterEqual(minor_score, 0.0)
@@ -78,9 +72,7 @@ class TestChordProgressionAnalyzer(unittest.TestCase):
         chroma_mean[4] = 0.8  # Major third
         chroma_mean[7] = 0.6  # Perfect fifth
 
-        major_score = ChordProgressionAnalyzer._analyze_major_chord_progression(
-            chroma_mean, 0
-        )
+        major_score = ChordProgressionAnalyzer._analyze_major_chord_progression(chroma_mean, 0)
 
         self.assertIsInstance(major_score, (int, float))
         self.assertGreaterEqual(major_score, 0.0)

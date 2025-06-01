@@ -36,20 +36,7 @@ class TestMusicTheory(unittest.TestCase):
 
     def test_midi_to_note_name_all_chromatic(self):
         """Test all chromatic notes in an octave."""
-        expected_notes = [
-            'C4',
-            'C#4',
-            'D4',
-            'D#4',
-            'E4',
-            'F4',
-            'F#4',
-            'G4',
-            'G#4',
-            'A4',
-            'A#4',
-            'B4',
-        ]
+        expected_notes = ['C4', 'C#4', 'D4', 'D#4', 'E4', 'F4', 'F#4', 'G4', 'G#4', 'A4', 'A#4', 'B4']
 
         for i, expected in enumerate(expected_notes):
             midi_note = 60 + i  # Starting from middle C
@@ -190,12 +177,7 @@ class TestMusicTheory(unittest.TestCase):
     def test_frequency_to_midi_consistency(self):
         """Test consistency between frequency and MIDI conversions."""
         # Test known frequency-MIDI pairs
-        known_pairs = [
-            (261.63, 60),  # C4
-            (440.00, 69),  # A4
-            (523.25, 72),  # C5
-            (880.00, 81),  # A5
-        ]
+        known_pairs = [(261.63, 60), (440.00, 69), (523.25, 72), (880.00, 81)]  # C4  # A4  # C5  # A5
 
         for freq, expected_midi in known_pairs:
             # Convert frequency to MIDI (approximate)

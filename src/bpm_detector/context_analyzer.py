@@ -1,6 +1,6 @@
 """Context analysis module for section classification."""
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
@@ -10,13 +10,9 @@ class ContextAnalyzer:
 
     def __init__(self):
         """Initialize context analyzer."""
-        pass
 
     def classify_with_relative_energy(
-        self,
-        characteristics: Dict[str, Any],
-        all_energies: List[float],
-        current_index: int,
+        self, characteristics: Dict[str, Any], all_energies: List[float], current_index: int
     ) -> str:
         """Classify section type based on relative energy analysis.
 
@@ -35,7 +31,15 @@ class ContextAnalyzer:
 
         # Calculate energy percentiles
         energy_percentiles = np.percentile(all_energies, [25, 50, 75, 90])
-        p25, p50, p75, p90 = energy_percentiles
+        # Ensure we get an array and convert to list for indexing
+        percentile_array = np.asarray(energy_percentiles)
+        if percentile_array.ndim > 0 and len(percentile_array) >= 4:
+            p50: float = float(percentile_array[1])
+            p75: float = float(percentile_array[2])
+            p90: float = float(percentile_array[3])
+        else:
+            # Fallback for scalar case
+            p50 = p75 = p90 = float(percentile_array)
 
         # Analyze energy trend
         trend = self._analyze_energy_trend(current_index, all_energies)
@@ -67,9 +71,7 @@ class ContextAnalyzer:
             else:
                 return 'verse'
 
-    def _analyze_energy_trend(
-        self, current_index: int, all_energies: List[float]
-    ) -> str:
+    def _analyze_energy_trend(self, current_index: int, all_energies: List[float]) -> str:
         """Analyze energy trend around current position.
 
         Args:
@@ -83,17 +85,9 @@ class ContextAnalyzer:
             return 'stable'
 
         # Look at previous and next sections
-        prev_energy = (
-            all_energies[current_index - 1]
-            if current_index > 0
-            else all_energies[current_index]
-        )
+        prev_energy = all_energies[current_index - 1] if current_index > 0 else all_energies[current_index]
         current_energy = all_energies[current_index]
-        next_energy = (
-            all_energies[current_index + 1]
-            if current_index < len(all_energies) - 1
-            else current_energy
-        )
+        next_energy = all_energies[current_index + 1] if current_index < len(all_energies) - 1 else current_energy
 
         # Calculate trends
         prev_trend = current_energy - prev_energy
@@ -158,11 +152,7 @@ class ContextAnalyzer:
                 next_energy = next_sections[0].get('energy', 0.0)
 
             # If isolated high energy (not part of a high-energy sequence)
-            if (
-                current_energy > 0.6
-                and prev_energy < current_energy * 0.7
-                and next_energy < current_energy * 0.7
-            ):
+            if current_energy > 0.6 and prev_energy < current_energy * 0.7 and next_energy < current_energy * 0.7:
                 # Might be a verse with high energy
                 complexity = characteristics.get('spectral_complexity', 0.0)
                 if complexity < 0.6:  # Lower complexity suggests verse
@@ -204,9 +194,7 @@ class ContextAnalyzer:
         # Rule 3: Consecutive section resolution
         if len(previous_sections) > 0:
             prev_type = previous_sections[-1].get('type', '')
-            resolved_type = self._resolve_consecutive_sections(
-                base_type, characteristics
-            )
+            resolved_type = self._resolve_consecutive_sections(base_type, characteristics)
 
             # Avoid consecutive pre_chorus
             if prev_type == 'pre_chorus' and resolved_type == 'pre_chorus':
@@ -253,11 +241,10 @@ class ContextAnalyzer:
 
         # Building if energy increases significantly OR both energy and complexity increase
         significant_energy_increase = current_energy > prev_energy * 1.5
-        return significant_energy_increase or (energy_increase and complexity_increase)
+        result: bool = significant_energy_increase or (energy_increase and complexity_increase)
+        return result
 
-    def _resolve_consecutive_sections(
-        self, section_type: str, characteristics: Dict[str, Any]
-    ) -> str:
+    def _resolve_consecutive_sections(self, section_type: str, characteristics: Dict[str, Any]) -> str:
         """Resolve consecutive sections of the same type.
 
         Args:
@@ -288,10 +275,7 @@ class ContextAnalyzer:
         return section_type
 
     def detect_verse_repetition(
-        self,
-        similarity_matrix: np.ndarray,
-        sections: List[Dict[str, Any]],
-        threshold: float = 0.8,
+        self, similarity_matrix: np.ndarray, sections: List[Dict[str, Any]], threshold: float = 0.8
     ) -> List[int]:
         """Detect verse repetition patterns.
 
@@ -303,7 +287,7 @@ class ContextAnalyzer:
         Returns:
             List of indices of repeated verses
         """
-        repeated_indices = []
+        repeated_indices: List[int] = []
 
         if similarity_matrix.shape[0] != len(sections):
             return repeated_indices
@@ -316,10 +300,7 @@ class ContextAnalyzer:
                     type_i = sections[i].get('type', '')
                     type_j = sections[j].get('type', '')
 
-                    if type_i in ['verse', 'pre_chorus'] and type_j in [
-                        'verse',
-                        'pre_chorus',
-                    ]:
+                    if type_i in ['verse', 'pre_chorus'] and type_j in ['verse', 'pre_chorus']:
                         # Mark as repeated verses
                         if i not in repeated_indices:
                             repeated_indices.append(i)
@@ -349,9 +330,7 @@ class ContextAnalyzer:
             Classified section type
         """
         # Start with relative energy classification
-        base_type = self.classify_with_relative_energy(
-            characteristics, all_energies, current_index
-        )
+        base_type = self.classify_with_relative_energy(characteristics, all_energies, current_index)
 
         # Apply R-B pairing and verse recovery
         refined_type = self.apply_rb_pairing_and_verse_recovery(
@@ -359,9 +338,7 @@ class ContextAnalyzer:
         )
 
         # Apply context rules
-        final_type = self.apply_context_rules(
-            refined_type, previous_sections, characteristics, current_index
-        )
+        final_type = self.apply_context_rules(refined_type, previous_sections, characteristics, current_index)
 
         return final_type
 
@@ -369,7 +346,7 @@ class ContextAnalyzer:
         self,
         characteristics: Dict[str, Any],
         previous_sections: List[Dict[str, Any]],
-        similarity_matrix: np.ndarray = None,
+        similarity_matrix: Optional[np.ndarray] = None,
         section_index: int = 0,
     ) -> str:
         """Classify section type with context analysis.
@@ -402,10 +379,7 @@ class ContextAnalyzer:
             if energy > 0.7 and complexity > 0.6:
                 base_type = 'chorus'
             elif energy > 0.5 and complexity > 0.5:
-                if (
-                    len(previous_sections) > 0
-                    and previous_sections[-1].get('type') == 'verse'
-                ):
+                if len(previous_sections) > 0 and previous_sections[-1].get('type') == 'verse':
                     base_type = 'pre_chorus'
                 else:
                     base_type = 'verse'
@@ -417,8 +391,6 @@ class ContextAnalyzer:
                 base_type = 'verse'
 
         # Apply context rules
-        final_type = self.apply_context_rules(
-            base_type, previous_sections, characteristics, section_index
-        )
+        final_type = self.apply_context_rules(base_type, previous_sections, characteristics, section_index)
 
         return final_type

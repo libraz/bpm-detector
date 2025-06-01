@@ -6,8 +6,7 @@ import librosa
 import numpy as np
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import find_peaks
-from sklearn.decomposition import PCA
-from sklearn.metrics.pairwise import cosine_similarity, rbf_kernel
+from sklearn.metrics.pairwise import cosine_similarity
 
 
 class BoundaryDetector:
@@ -21,9 +20,7 @@ class BoundaryDetector:
         """
         self.hop_length = hop_length
 
-    def extract_structural_features(
-        self, y: np.ndarray, sr: int
-    ) -> Dict[str, np.ndarray]:
+    def extract_structural_features(self, y: np.ndarray, sr: int) -> Dict[str, np.ndarray]:
         """Extract essential features for reliable structural analysis.
 
         Args:
@@ -36,28 +33,20 @@ class BoundaryDetector:
         features = {}
 
         # MFCC features for timbral similarity (most important)
-        features['mfcc'] = librosa.feature.mfcc(
-            y=y, sr=sr, n_mfcc=13, hop_length=self.hop_length
-        )
+        features['mfcc'] = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13, hop_length=self.hop_length)
 
         # Chroma features for harmonic content (essential for structure)
-        features['chroma'] = librosa.feature.chroma_stft(
-            y=y, sr=sr, hop_length=self.hop_length
-        )
+        features['chroma'] = librosa.feature.chroma_stft(y=y, sr=sr, hop_length=self.hop_length)
 
         # RMS energy for dynamics (important for section changes)
         features['rms'] = librosa.feature.rms(y=y, hop_length=self.hop_length)
 
         # Spectral centroid for brightness changes
-        features['spectral_centroid'] = librosa.feature.spectral_centroid(
-            y=y, sr=sr, hop_length=self.hop_length
-        )
+        features['spectral_centroid'] = librosa.feature.spectral_centroid(y=y, sr=sr, hop_length=self.hop_length)
 
         return features
 
-    def compute_self_similarity_matrix(
-        self, features: Dict[str, np.ndarray]
-    ) -> np.ndarray:
+    def compute_self_similarity_matrix(self, features: Dict[str, np.ndarray]) -> np.ndarray:
         """Compute simple and reliable self-similarity matrix using cosine similarity.
 
         Args:
@@ -97,11 +86,7 @@ class BoundaryDetector:
         return similarity_matrix
 
     def detect_boundaries(
-        self,
-        similarity_matrix: np.ndarray,
-        sr: int,
-        min_segment_length: float = 6.0,
-        bpm: float = 130.0,
+        self, similarity_matrix: np.ndarray, sr: int, min_segment_length: float = 6.0, bpm: float = 130.0
     ) -> List[int]:
         """Detect structural boundaries using multi-scale novelty detection.
 
@@ -136,15 +121,11 @@ class BoundaryDetector:
         # If too few boundaries, progressively relax constraints
         if len(peaks) < 3:
             height_threshold = novelty_sorted[int(len(novelty_sorted) * 0.6)]
-            peaks, _ = find_peaks(
-                novelty, distance=min_frames // 2, height=height_threshold
-            )
+            peaks, _ = find_peaks(novelty, distance=min_frames // 2, height=height_threshold)
 
         if len(peaks) < 3:
             height_threshold = novelty_sorted[int(len(novelty_sorted) * 0.5)]
-            peaks, _ = find_peaks(
-                novelty, distance=min_frames // 3, height=height_threshold
-            )
+            peaks, _ = find_peaks(novelty, distance=min_frames // 3, height=height_threshold)
 
         # snap to 4-beat grid first
         bar_frames = int((4 * 60 / bpm) * sr / self.hop_length)
@@ -153,7 +134,7 @@ class BoundaryDetector:
         boundaries = [0] + peaks + [n_frames - 1]
         boundaries = sorted(list(set(boundaries)))
 
-        # 8 bars (=2 bar *4) 以上離れているかでフィルタ
+        # Filter boundaries that are at least 8 bars (=2 bar *4) apart
         min_sep = int((8 * 60 / bpm) * sr / self.hop_length)
 
         # Ensure minimum separation
@@ -165,9 +146,7 @@ class BoundaryDetector:
 
         return filtered_boundaries
 
-    def _compute_beat_synchronized_novelty(
-        self, similarity_matrix: np.ndarray, sr: int, bpm: float
-    ) -> np.ndarray:
+    def _compute_beat_synchronized_novelty(self, similarity_matrix: np.ndarray, sr: int, bpm: float) -> np.ndarray:
         """Compute beat-synchronized novelty function using Foote kernel.
 
         Args:
@@ -183,18 +162,14 @@ class BoundaryDetector:
 
         # Calculate 1/8 note resolution for beat synchronization
         eighth_note_frames = int((60.0 / (bpm * 2)) * sr / self.hop_length)
-        kernel_size = max(
-            8, min(eighth_note_frames * 4, n_frames // 8)
-        )  # 4 eighth notes = half beat
+        kernel_size = max(8, min(eighth_note_frames * 4, n_frames // 8))  # 4 eighth notes = half beat
 
         # Create Foote kernel for boundary detection
         foote_kernel = self._create_foote_kernel(kernel_size)
 
         for i in range(kernel_size, n_frames - kernel_size):
             # Extract local similarity matrix
-            local_sim = similarity_matrix[
-                i - kernel_size : i + kernel_size, i - kernel_size : i + kernel_size
-            ]
+            local_sim = similarity_matrix[i - kernel_size : i + kernel_size, i - kernel_size : i + kernel_size]
 
             # Apply Foote kernel convolution
             novelty[i] = np.sum(local_sim * foote_kernel)
@@ -229,9 +204,7 @@ class BoundaryDetector:
 
         return kernel
 
-    def _align_to_adaptive_grid(
-        self, novelty: np.ndarray, primary_grid: int, secondary_grid: int
-    ) -> np.ndarray:
+    def _align_to_adaptive_grid(self, novelty: np.ndarray, primary_grid: int, secondary_grid: int) -> np.ndarray:
         """Align novelty peaks to adaptive grid (2-bar or 4-bar) using Hough transform approach.
 
         Args:
@@ -252,35 +225,25 @@ class BoundaryDetector:
                 search_end = min(len(novelty), i + primary_grid // 4)
 
                 if search_end > search_start:
-                    local_max_idx = search_start + np.argmax(
-                        novelty[search_start:search_end]
-                    )
+                    local_max_idx = search_start + np.argmax(novelty[search_start:search_end])
 
                     # Snap to nearest primary grid boundary
                     grid_position = round(local_max_idx / primary_grid) * primary_grid
                     if 0 <= grid_position < len(aligned_novelty):
-                        aligned_novelty[grid_position] = max(
-                            aligned_novelty[grid_position], novelty[local_max_idx]
-                        )
+                        aligned_novelty[grid_position] = max(aligned_novelty[grid_position], novelty[local_max_idx])
 
         # Second pass: enhance with secondary grid for major boundaries
-        for i in range(
-            0, len(novelty), secondary_grid // 2
-        ):  # Check every half-secondary-grid
+        for i in range(0, len(novelty), secondary_grid // 2):  # Check every half-secondary-grid
             if i + secondary_grid < len(novelty):
                 # Find the maximum novelty within ±quarter-grid of secondary grid
                 search_start = max(0, i - secondary_grid // 8)
                 search_end = min(len(novelty), i + secondary_grid // 8)
 
                 if search_end > search_start:
-                    local_max_idx = search_start + np.argmax(
-                        novelty[search_start:search_end]
-                    )
+                    local_max_idx = search_start + np.argmax(novelty[search_start:search_end])
 
                     # Snap to nearest secondary grid boundary
-                    grid_position = (
-                        round(local_max_idx / secondary_grid) * secondary_grid
-                    )
+                    grid_position = round(local_max_idx / secondary_grid) * secondary_grid
                     if 0 <= grid_position < len(aligned_novelty):
                         # Boost secondary grid positions for major boundaries
                         aligned_novelty[grid_position] = max(
@@ -309,9 +272,7 @@ class BoundaryDetector:
                 search_end = min(len(novelty), i + bar_8_frames // 8)
 
                 if search_end > search_start:
-                    local_max_idx = search_start + np.argmax(
-                        novelty[search_start:search_end]
-                    )
+                    local_max_idx = search_start + np.argmax(novelty[search_start:search_end])
 
                     # Snap to nearest 8-bar boundary
                     grid_position = round(local_max_idx / bar_8_frames) * bar_8_frames
@@ -320,9 +281,7 @@ class BoundaryDetector:
 
         return aligned_novelty
 
-    def _compute_simple_novelty(
-        self, similarity_matrix: np.ndarray, ksize: int = 12
-    ) -> np.ndarray:
+    def _compute_simple_novelty(self, similarity_matrix: np.ndarray, ksize: int = 12) -> np.ndarray:
         """Compute simple and reliable novelty function from similarity matrix.
 
         Args:
@@ -413,9 +372,7 @@ class BoundaryDetector:
 
         return filtered
 
-    def detect_repetitions(
-        self, similarity_matrix: np.ndarray, sr: int
-    ) -> List[Dict[str, float]]:
+    def detect_repetitions(self, similarity_matrix: np.ndarray, sr: int) -> List[Dict[str, float]]:
         """Detect repeated sections in the music.
 
         Args:
@@ -425,7 +382,7 @@ class BoundaryDetector:
         Returns:
             List of detected repetitions
         """
-        repetitions = []
+        repetitions: List[Dict[str, float]] = []
         n_frames = similarity_matrix.shape[0]
 
         # Look for diagonal patterns in similarity matrix (optimized)
@@ -450,11 +407,7 @@ class BoundaryDetector:
 
                 # Calculate similarity along diagonal
                 diagonal_sim = np.mean(
-                    [
-                        similarity_matrix[i + k, j + k]
-                        for k in sample_indices
-                        if i + k < n_frames and j + k < n_frames
-                    ]
+                    [similarity_matrix[i + k, j + k] for k in sample_indices if i + k < n_frames and j + k < n_frames]
                 )
 
                 if diagonal_sim > 0.8:  # High similarity threshold
@@ -467,7 +420,7 @@ class BoundaryDetector:
                             'first_occurrence': start_time_1,
                             'second_occurrence': start_time_2,
                             'duration': duration,
-                            'similarity': diagonal_sim,
+                            'similarity': float(diagonal_sim),
                         }
                     )
 
@@ -476,9 +429,7 @@ class BoundaryDetector:
 
         return repetitions
 
-    def _remove_overlapping_repetitions(
-        self, repetitions: List[Dict[str, float]]
-    ) -> List[Dict[str, float]]:
+    def _remove_overlapping_repetitions(self, repetitions: List[Dict[str, float]]) -> List[Dict[str, float]]:
         """Remove overlapping repetition detections.
 
         Args:
@@ -493,7 +444,7 @@ class BoundaryDetector:
         # Sort by similarity (highest first)
         repetitions.sort(key=lambda x: x['similarity'], reverse=True)
 
-        filtered = []
+        filtered: List[Dict[str, float]] = []
 
         for rep in repetitions:
             # Check if this repetition overlaps with any already accepted
@@ -509,9 +460,7 @@ class BoundaryDetector:
 
         return filtered
 
-    def _repetitions_overlap(
-        self, rep1: Dict[str, float], rep2: Dict[str, float]
-    ) -> bool:
+    def _repetitions_overlap(self, rep1: Dict[str, float], rep2: Dict[str, float]) -> bool:
         """Check if two repetitions overlap.
 
         Args:

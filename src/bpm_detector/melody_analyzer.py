@@ -1,12 +1,12 @@
 """Melody extraction and analysis module."""
 
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, Union
 
 import librosa
 import numpy as np
 from scipy.signal import find_peaks
 
-from .music_theory import INTERVALS, NOTE_NAMES, classify_vocal_range, midi_to_note_name
+from .music_theory import INTERVALS, classify_vocal_range, midi_to_note_name
 
 
 class MelodyAnalyzer:
@@ -55,9 +55,7 @@ class MelodyAnalyzer:
         clean_melody[~voiced_flag] = np.nan
 
         # Calculate time axis
-        times = librosa.frames_to_time(
-            np.arange(len(f0)), sr=sr, hop_length=self.hop_length
-        )
+        times = librosa.frames_to_time(np.arange(len(f0)), sr=sr, hop_length=self.hop_length)
 
         return {
             'f0': f0,
@@ -69,7 +67,7 @@ class MelodyAnalyzer:
             'times': times,
         }
 
-    def analyze_melodic_range(self, melody: Dict[str, np.ndarray]) -> Dict[str, float]:
+    def analyze_melodic_range(self, melody: Dict[str, np.ndarray]) -> Dict[str, Union[float, str]]:
         """Analyze melodic range characteristics.
 
         Args:
@@ -82,7 +80,7 @@ class MelodyAnalyzer:
         if 'clean_melody' in melody:
             clean_melody = melody['clean_melody']
         else:
-            # f0とvoiced_flagから clean_melody を作成
+            # Create clean_melody from f0 and voiced_flag
             f0 = melody.get('f0', np.array([]))
             voiced_flag = melody.get('voiced_flag', np.array([]))
             if len(f0) > 0 and len(voiced_flag) > 0:
@@ -92,11 +90,7 @@ class MelodyAnalyzer:
             else:
                 clean_melody = np.array([])
 
-        valid_notes = (
-            clean_melody[~np.isnan(clean_melody)]
-            if len(clean_melody) > 0
-            else np.array([])
-        )
+        valid_notes = clean_melody[~np.isnan(clean_melody)] if len(clean_melody) > 0 else np.array([])
 
         if len(valid_notes) == 0:
             return {
@@ -115,8 +109,8 @@ class MelodyAnalyzer:
             }
 
         # Full melodic range (including instruments)
-        lowest = np.min(valid_notes)
-        highest = np.max(valid_notes)
+        lowest = float(np.min(valid_notes))
+        highest = float(np.max(valid_notes))
         range_semitones = highest - lowest
         range_octaves = range_semitones / 12.0
 
@@ -131,8 +125,8 @@ class MelodyAnalyzer:
         vocal_notes = self._extract_vocal_range(valid_notes)
 
         if len(vocal_notes) > 0:
-            vocal_lowest = np.min(vocal_notes)
-            vocal_highest = np.max(vocal_notes)
+            vocal_lowest = float(np.min(vocal_notes))
+            vocal_highest = float(np.max(vocal_notes))
             vocal_lowest_note_name = midi_to_note_name(vocal_lowest)
             vocal_highest_note_name = midi_to_note_name(vocal_highest)
             vocal_category = classify_vocal_range(vocal_lowest, vocal_highest)
@@ -157,7 +151,7 @@ class MelodyAnalyzer:
             'pitch_std': float(np.std(valid_notes)),
         }
 
-    def _extract_vocal_range(self, notes: np.ndarray) -> np.ndarray:
+    def _extract_vocal_range(self, notes: np.ndarray) -> "np.ndarray[Any, Any]":
         """Extract likely vocal notes from melody.
 
         Args:
@@ -169,11 +163,11 @@ class MelodyAnalyzer:
         # Tests expect frequency (Hz) but implementation uses MIDI notes
         # Use frequency ranges to match test expectations
         if len(notes) > 0 and np.max(notes) > 100:  # Treat as frequency
-            # 周波数範囲での処理
+            # Processing in frequency range
             vocal_min = 80  # 80 Hz
             vocal_max = 1000  # 1000 Hz
         else:
-            # MIDI音符範囲での処理
+            # Processing in MIDI note range
             vocal_min = 48  # C3 - more conservative lowest vocal note
             vocal_max = 84  # C6 - highest reasonable vocal note
 
@@ -186,7 +180,7 @@ class MelodyAnalyzer:
             vocal_candidates = notes[(notes >= vocal_min) & (notes <= vocal_max)]
 
             if len(vocal_candidates) == 0:
-                return np.array([])
+                return np.array([], dtype=np.float64)
 
         # Find the main vocal cluster using histogram analysis
         # Most vocal melodies cluster around a specific range
@@ -200,17 +194,13 @@ class MelodyAnalyzer:
         if main_range_center < 55:  # Below G3
             # Look for a secondary peak in higher range
             higher_range_mask = vocal_candidates >= 55
-            if (
-                np.sum(higher_range_mask) > len(vocal_candidates) * 0.2
-            ):  # At least 20% of notes
+            if np.sum(higher_range_mask) > len(vocal_candidates) * 0.2:  # At least 20% of notes
                 higher_notes = vocal_candidates[higher_range_mask]
                 main_range_center = np.median(higher_notes)
 
         # Keep notes within 1.5 octaves of the main cluster (typical vocal range)
         vocal_range_limit = 18  # 1.5 octaves
-        vocal_notes = vocal_candidates[
-            np.abs(vocal_candidates - main_range_center) <= vocal_range_limit
-        ]
+        vocal_notes = vocal_candidates[np.abs(vocal_candidates - main_range_center) <= vocal_range_limit]
 
         # Enhanced filter: remove extreme outliers using 2.5 sigma rule
         # This helps exclude whistle notes and other extreme instrumental sounds
@@ -223,27 +213,20 @@ class MelodyAnalyzer:
             lower_bound = mean_note - sigma_threshold * std_note
             upper_bound = mean_note + sigma_threshold * std_note
 
-            vocal_notes = vocal_notes[
-                (vocal_notes >= lower_bound) & (vocal_notes <= upper_bound)
-            ]
+            vocal_notes = vocal_notes[(vocal_notes >= lower_bound) & (vocal_notes <= upper_bound)]
 
             # Fallback to percentile method if sigma filtering removes too much
-            if (
-                len(vocal_notes) < len(vocal_candidates) * 0.3
-            ):  # Less than 30% remaining
+            if len(vocal_notes) < len(vocal_candidates) * 0.3:  # Less than 30% remaining
                 # Use more conservative percentile filtering
                 percentile_10 = np.percentile(vocal_candidates, 10)
                 percentile_90 = np.percentile(vocal_candidates, 90)
                 vocal_notes = vocal_candidates[
-                    (vocal_candidates >= percentile_10)
-                    & (vocal_candidates <= percentile_90)
+                    (vocal_candidates >= percentile_10) & (vocal_candidates <= percentile_90)
                 ]
 
-        return vocal_notes
+        return np.array(vocal_notes, dtype=np.float64)
 
-    def analyze_melodic_direction(
-        self, melody: Dict[str, np.ndarray]
-    ) -> Dict[str, Any]:
+    def analyze_melodic_direction(self, melody: Dict[str, np.ndarray]) -> Dict[str, Any]:
         """Analyze melodic direction and contour.
 
         Args:
@@ -265,11 +248,7 @@ class MelodyAnalyzer:
             else:
                 clean_melody = np.array([])
 
-        valid_indices = (
-            ~np.isnan(clean_melody)
-            if len(clean_melody) > 0
-            else np.array([], dtype=bool)
-        )
+        valid_indices = ~np.isnan(clean_melody) if len(clean_melody) > 0 else np.array([], dtype=bool)
 
         if np.sum(valid_indices) < 2:
             return {
@@ -312,8 +291,8 @@ class MelodyAnalyzer:
             }
 
         # Count direction changes
-        ascending = np.sum(pitch_diffs > 0.5)  # Threshold to avoid noise
-        descending = np.sum(pitch_diffs < -0.5)
+        ascending = int(np.sum(pitch_diffs > 0.5))  # Threshold to avoid noise
+        descending = int(np.sum(pitch_diffs < -0.5))
         static = len(pitch_diffs) - ascending - descending
 
         total = len(pitch_diffs)
@@ -335,9 +314,7 @@ class MelodyAnalyzer:
             if (pitch_diffs[i - 1] > 0) != (pitch_diffs[i] > 0):
                 direction_changes += 1
 
-        contour_complexity = (
-            direction_changes / len(pitch_diffs) if len(pitch_diffs) > 0 else 0
-        )
+        contour_complexity = direction_changes / len(pitch_diffs) if len(pitch_diffs) > 0 else 0
 
         # Average step size
         average_step_size = np.mean(np.abs(pitch_diffs))
@@ -353,30 +330,17 @@ class MelodyAnalyzer:
             'average_step_size': float(average_step_size),
             'step_sizes': {  # Field name expected by tests
                 'average': float(average_step_size),
-                'small': (
-                    float(np.sum(np.abs(pitch_diffs) <= 2) / len(pitch_diffs))
-                    if len(pitch_diffs) > 0
-                    else 0.0
-                ),
+                'small': (float(np.sum(np.abs(pitch_diffs) <= 2) / len(pitch_diffs)) if len(pitch_diffs) > 0 else 0.0),
                 'medium': (
-                    float(
-                        np.sum((np.abs(pitch_diffs) > 2) & (np.abs(pitch_diffs) <= 7))
-                        / len(pitch_diffs)
-                    )
+                    float(np.sum((np.abs(pitch_diffs) > 2) & (np.abs(pitch_diffs) <= 7)) / len(pitch_diffs))
                     if len(pitch_diffs) > 0
                     else 0.0
                 ),
-                'large': (
-                    float(np.sum(np.abs(pitch_diffs) > 7) / len(pitch_diffs))
-                    if len(pitch_diffs) > 0
-                    else 0.0
-                ),
+                'large': (float(np.sum(np.abs(pitch_diffs) > 7) / len(pitch_diffs)) if len(pitch_diffs) > 0 else 0.0),
             },
         }
 
-    def analyze_interval_distribution(
-        self, melody: Dict[str, np.ndarray]
-    ) -> Dict[str, float]:
+    def analyze_interval_distribution(self, melody: Dict[str, np.ndarray]) -> Dict[str, float]:
         """Analyze distribution of melodic intervals.
 
         Args:
@@ -398,11 +362,7 @@ class MelodyAnalyzer:
             else:
                 clean_melody = np.array([])
 
-        valid_indices = (
-            ~np.isnan(clean_melody)
-            if len(clean_melody) > 0
-            else np.array([], dtype=bool)
-        )
+        valid_indices = ~np.isnan(clean_melody) if len(clean_melody) > 0 else np.array([], dtype=bool)
 
         if np.sum(valid_indices) < 2:
             return {interval: 0.0 for interval in INTERVALS.values()}
@@ -426,10 +386,7 @@ class MelodyAnalyzer:
         # Convert to ratios
         total_intervals = len(intervals)
         if total_intervals > 0:
-            interval_distribution = {
-                interval: count / total_intervals
-                for interval, count in interval_counts.items()
-            }
+            interval_distribution = {interval: count / total_intervals for interval, count in interval_counts.items()}
         else:
             interval_distribution = {interval: 0.0 for interval in INTERVALS.values()}
 
@@ -447,15 +404,7 @@ class MelodyAnalyzer:
         large_intervals = sum(
             count
             for interval, count in interval_distribution.items()
-            if interval
-            in [
-                'perfect_fifth',
-                'minor_sixth',
-                'major_sixth',
-                'minor_seventh',
-                'major_seventh',
-                'octave',
-            ]
+            if interval in ['perfect_fifth', 'minor_sixth', 'major_sixth', 'minor_seventh', 'major_seventh', 'octave']
         )
 
         # Also count intervals larger than octave as large intervals
@@ -474,9 +423,7 @@ class MelodyAnalyzer:
 
         return interval_distribution
 
-    def analyze_pitch_stability(
-        self, melody: Dict[str, np.ndarray]
-    ) -> Dict[str, float]:
+    def analyze_pitch_stability(self, melody: Dict[str, np.ndarray]) -> Dict[str, float]:
         """Analyze pitch stability and vibrato.
 
         Args:
@@ -489,23 +436,13 @@ class MelodyAnalyzer:
         voiced_flag = melody['voiced_flag']
 
         if not np.any(voiced_flag):
-            return {
-                'pitch_stability': 0.0,
-                'vibrato_rate': 0.0,
-                'vibrato_extent': 0.0,
-                'pitch_drift': 0.0,
-            }
+            return {'pitch_stability': 0.0, 'vibrato_rate': 0.0, 'vibrato_extent': 0.0, 'pitch_drift': 0.0}
 
         # Extract voiced segments
         voiced_f0 = f0[voiced_flag]
 
         if len(voiced_f0) < 10:  # Need sufficient data
-            return {
-                'pitch_stability': 0.0,
-                'vibrato_rate': 0.0,
-                'vibrato_extent': 0.0,
-                'pitch_drift': 0.0,
-            }
+            return {'pitch_stability': 0.0, 'vibrato_rate': 0.0, 'vibrato_extent': 0.0, 'pitch_drift': 0.0}
 
         # Calculate pitch stability (inverse of coefficient of variation)
         pitch_cv = np.std(voiced_f0) / (np.mean(voiced_f0) + 1e-8)
@@ -557,20 +494,16 @@ class MelodyAnalyzer:
         # f = (sample_rate / hop_length) / period_in_samples
         # For test data: 100 samples over 2 seconds = 50 Hz sample rate
         sample_rate_effective = len(f0) / 2.0  # 100 samples / 2 seconds = 50 Hz
-        vibrato_rate = (
-            sample_rate_effective / (vibrato_period + 1e-8)
-            if vibrato_period > 0
-            else 0.0
-        )
+        vibrato_rate = sample_rate_effective / (vibrato_period + 1e-8) if vibrato_period > 0 else 0.0
         vibrato_rate = min(10.0, vibrato_rate)  # Cap at reasonable value
 
         # Round to avoid floating point precision issues
         vibrato_rate = round(vibrato_rate, 1)
 
         # Calculate vibrato extent (amplitude of oscillation)
-        vibrato_extent = np.std(detrended) / (np.mean(f0) + 1e-8)
+        vibrato_extent: float = float(np.std(detrended) / (np.mean(f0) + 1e-8))
 
-        return vibrato_rate, vibrato_extent
+        return float(vibrato_rate), vibrato_extent
 
     def _calculate_pitch_drift(self, f0: np.ndarray) -> float:
         """Calculate long-term pitch drift.
@@ -590,6 +523,6 @@ class MelodyAnalyzer:
         slope = coeffs[0]
 
         # Normalize by mean frequency
-        drift = abs(slope) / (np.mean(f0) + 1e-8)
+        drift: float = float(abs(slope) / (np.mean(f0) + 1e-8))
 
-        return min(1.0, drift * 100)  # Scale and cap
+        return float(min(1.0, drift * 100))  # Scale and cap

@@ -1,6 +1,6 @@
 """Audio feature analysis module for section classification."""
 
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 import librosa
 import numpy as np
@@ -44,9 +44,7 @@ class FeatureAnalyzer:
         enhanced_chars['rhythm_density'] = self._calculate_rhythm_density(segment, sr)
 
         # Melody jump rate
-        enhanced_chars['melody_jump_rate'] = self._calculate_melody_jump_rate(
-            segment, sr
-        )
+        enhanced_chars['melody_jump_rate'] = self._calculate_melody_jump_rate(segment, sr)
 
         # Vocal presence
         enhanced_chars['vocal_presence'] = self._detect_vocal_presence(segment, sr)
@@ -60,9 +58,7 @@ class FeatureAnalyzer:
         enhanced_chars['voiced_ratio'] = self._calculate_voiced_ratio(enhanced_chars)
 
         # First peak time
-        enhanced_chars['first_peak_time'] = self._find_first_peak_time(
-            enhanced_chars, start_time
-        )
+        enhanced_chars['first_peak_time'] = self._find_first_peak_time(enhanced_chars, start_time)
 
         # Time information
         enhanced_chars['start_time'] = start_time
@@ -71,9 +67,7 @@ class FeatureAnalyzer:
 
         return enhanced_chars
 
-    def analyze_segment_characteristics(
-        self, segment: np.ndarray, sr: int
-    ) -> Dict[str, Any]:
+    def analyze_segment_characteristics(self, segment: np.ndarray, sr: int) -> Dict[str, Any]:
         """Analyze basic characteristics of an audio segment.
 
         Args:
@@ -95,22 +89,16 @@ class FeatureAnalyzer:
             magnitude = np.abs(stft)
 
             # Spectral centroid (brightness)
-            spectral_centroid = np.mean(
-                librosa.feature.spectral_centroid(S=magnitude, sr=sr)
-            )
+            spectral_centroid = np.mean(librosa.feature.spectral_centroid(S=magnitude, sr=sr))
 
             # Spectral rolloff
-            spectral_rolloff = np.mean(
-                librosa.feature.spectral_rolloff(S=magnitude, sr=sr)
-            )
+            spectral_rolloff = np.mean(librosa.feature.spectral_rolloff(S=magnitude, sr=sr))
 
             # Zero crossing rate
             zcr = np.mean(librosa.feature.zero_crossing_rate(segment))
 
             # Spectral complexity (spectral spread)
-            spectral_bandwidth = np.mean(
-                librosa.feature.spectral_bandwidth(S=magnitude, sr=sr)
-            )
+            spectral_bandwidth = np.mean(librosa.feature.spectral_bandwidth(S=magnitude, sr=sr))
             spectral_complexity = spectral_bandwidth / (spectral_centroid + 1e-8)
 
             # Harmonic content
@@ -118,17 +106,11 @@ class FeatureAnalyzer:
             harmonic_ratio = np.mean(harmonic**2) / (energy + 1e-8)
 
             # Tempo and rhythm
-            tempo, beats = librosa.beat.beat_track(
-                y=segment, sr=sr, hop_length=self.hop_length
-            )
-            rhythmic_density = (
-                len(beats) / (len(segment) / sr) if len(segment) > 0 else 0
-            )
+            tempo, beats = librosa.beat.beat_track(y=segment, sr=sr, hop_length=self.hop_length)
+            rhythmic_density = len(beats) / (len(segment) / sr) if len(segment) > 0 else 0
 
             # MFCC features
-            mfcc = librosa.feature.mfcc(
-                y=segment, sr=sr, n_mfcc=13, hop_length=self.hop_length
-            )
+            mfcc = librosa.feature.mfcc(y=segment, sr=sr, n_mfcc=13, hop_length=self.hop_length)
             mfcc_mean = np.mean(mfcc, axis=1)
             mfcc_var = np.var(mfcc, axis=1)
 
@@ -140,11 +122,7 @@ class FeatureAnalyzer:
                 'spectral_complexity': float(spectral_complexity),
                 'harmonic_content': float(harmonic_ratio),
                 'rhythmic_density': float(rhythmic_density),
-                'tempo': (
-                    float(tempo)
-                    if np.isscalar(tempo)
-                    else float(tempo[0]) if len(tempo) > 0 else 120.0
-                ),
+                'tempo': float(tempo) if np.isscalar(tempo) else 120.0,
                 'mfcc_mean': mfcc_mean.tolist(),
                 'mfcc_var': mfcc_var.tolist(),
                 'segment_length': len(segment),
@@ -169,9 +147,7 @@ class FeatureAnalyzer:
 
         try:
             # Use onset detection for rhythm density
-            onset_frames = librosa.onset.onset_detect(
-                y=segment, sr=sr, hop_length=self.hop_length, units='frames'
-            )
+            onset_frames = librosa.onset.onset_detect(y=segment, sr=sr, hop_length=self.hop_length, units='frames')
 
             # Calculate density as onsets per second
             duration = len(segment) / sr
@@ -199,10 +175,7 @@ class FeatureAnalyzer:
         try:
             # Extract fundamental frequency
             f0, voiced_flag, voiced_probs = librosa.pyin(
-                segment,
-                fmin=librosa.note_to_hz('C2'),
-                fmax=librosa.note_to_hz('C7'),
-                sr=sr,
+                segment, fmin=float(librosa.note_to_hz('C2')), fmax=float(librosa.note_to_hz('C7')), sr=sr
             )
 
             # Filter out unvoiced frames
@@ -218,7 +191,7 @@ class FeatureAnalyzer:
             intervals = np.abs(np.diff(semitones))
 
             # Count jumps > 2 semitones
-            large_jumps = np.sum(intervals > 2.0)
+            large_jumps: int = int(np.sum(intervals > 2.0))
             total_intervals = len(intervals)
 
             return float(large_jumps / total_intervals) if total_intervals > 0 else 0.0
@@ -226,9 +199,7 @@ class FeatureAnalyzer:
         except Exception:
             return 0.0
 
-    def _detect_spoken_word(
-        self, segment: np.ndarray, sr: int, energy: float, complexity: float
-    ) -> bool:
+    def _detect_spoken_word(self, segment: np.ndarray, sr: int, energy: float, complexity: float) -> bool:
         """Detect if segment contains spoken word.
 
         Args:
@@ -253,9 +224,7 @@ class FeatureAnalyzer:
             energy_threshold = 0.01  # Adjust based on normalization
 
             # Spectral characteristics
-            spectral_centroid = np.mean(
-                librosa.feature.spectral_centroid(y=segment, sr=sr)
-            )
+            spectral_centroid = np.mean(librosa.feature.spectral_centroid(y=segment, sr=sr))
             zero_crossing_rate = np.mean(librosa.feature.zero_crossing_rate(segment))
 
             # Spoken word typically has:
@@ -270,7 +239,7 @@ class FeatureAnalyzer:
                 and complexity < 0.5  # Lower spectral complexity
             )
 
-            return is_spoken
+            return bool(is_spoken)
 
         except Exception:
             return False
@@ -298,9 +267,7 @@ class FeatureAnalyzer:
             harmonic_ratio = harmonic_energy / (total_energy + 1e-8)
 
             # Spectral centroid (vocals typically in mid-frequency range)
-            spectral_centroid = np.mean(
-                librosa.feature.spectral_centroid(y=segment, sr=sr)
-            )
+            spectral_centroid = np.mean(librosa.feature.spectral_centroid(y=segment, sr=sr))
 
             # Vocal presence indicators
             has_vocals = (
@@ -354,9 +321,7 @@ class FeatureAnalyzer:
 
         return min(1.0, voiced_score)
 
-    def _find_first_peak_time(
-        self, characteristics: Dict[str, Any], start_time: float
-    ) -> float:
+    def _find_first_peak_time(self, characteristics: Dict[str, Any], start_time: float) -> float:
         """Find first peak time in segment.
 
         Args:
@@ -372,10 +337,10 @@ class FeatureAnalyzer:
 
         if energy > 0.5 and duration > 0:
             # High energy sections typically have early peaks
-            return start_time + duration * 0.3
+            return float(start_time + duration * 0.3)
         else:
             # Low energy sections have peaks later
-            return start_time + duration * 0.5
+            return float(start_time + duration * 0.5)
 
     def _get_default_characteristics(self) -> Dict[str, Any]:
         """Get default characteristics for empty segments.

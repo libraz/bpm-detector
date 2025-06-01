@@ -14,10 +14,7 @@ class TestMelodyHarmonyAnalyzer(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures."""
         self.analyzer = MelodyHarmonyAnalyzer(
-            hop_length=512,
-            fmin=80.0,
-            fmax=2000.0,
-            consonance_ratings={0: 1.0, 7: 0.8, 4: 0.7, 3: 0.6},
+            hop_length=512, fmin=80.0, fmax=2000.0, consonance_ratings={0: 1.0, 7: 0.8, 4: 0.7, 3: 0.6}
         )
         self.sr = 22050
 
@@ -36,24 +33,15 @@ class TestMelodyHarmonyAnalyzer(unittest.TestCase):
         # Create a melodic signal
         melody_freqs = [261.63, 293.66, 329.63, 349.23]  # C-D-E-F
         self.melodic_audio = np.concatenate(
-            [
-                0.5 * np.sin(2 * np.pi * freq * np.linspace(0, 1, self.sr))
-                for freq in melody_freqs
-            ]
+            [0.5 * np.sin(2 * np.pi * freq * np.linspace(0, 1, self.sr)) for freq in melody_freqs]
         )
 
     @patch('src.bpm_detector.melody_analyzer.MelodyAnalyzer.extract_melody')
-    @patch(
-        'src.bpm_detector.harmony_analyzer.HarmonyAnalyzer.analyze_harmony_complexity'
-    )
+    @patch('src.bpm_detector.harmony_analyzer.HarmonyAnalyzer.analyze_harmony_complexity')
     @patch('src.bpm_detector.harmony_analyzer.HarmonyAnalyzer.analyze_consonance')
     @patch('src.bpm_detector.harmony_analyzer.HarmonyAnalyzer.analyze_harmonic_rhythm')
     def test_analyze_complete(
-        self,
-        mock_harmonic_rhythm,
-        mock_consonance,
-        mock_harmony_complexity,
-        mock_extract_melody,
+        self, mock_harmonic_rhythm, mock_consonance, mock_harmony_complexity, mock_extract_melody
     ):
         """Test complete melody harmony analysis."""
         # Mock melody analyzer results
@@ -70,11 +58,7 @@ class TestMelodyHarmonyAnalyzer(unittest.TestCase):
             'harmonic_change_rate': 0.3,
         }
 
-        mock_consonance.return_value = {
-            'consonance_score': 0.75,
-            'dissonance_score': 0.25,
-            'interval_consonance': 0.8,
-        }
+        mock_consonance.return_value = {'consonance_score': 0.75, 'dissonance_score': 0.25, 'interval_consonance': 0.8}
 
         mock_harmonic_rhythm.return_value = {
             'harmonic_rhythm': 2.5,
@@ -129,9 +113,7 @@ class TestMelodyHarmonyAnalyzer(unittest.TestCase):
             progress_calls.append((progress, message))
 
         # Run analysis with callback
-        self.analyzer.analyze(
-            self.harmonic_audio, self.sr, progress_callback=progress_callback
-        )
+        self.analyzer.analyze(self.harmonic_audio, self.sr, progress_callback=progress_callback)
 
         # Check that progress was reported
         self.assertGreater(len(progress_calls), 0)
@@ -188,10 +170,7 @@ class TestMelodyHarmonyAnalyzer(unittest.TestCase):
     def test_initialization_with_custom_parameters(self):
         """Test analyzer initialization with custom parameters."""
         custom_analyzer = MelodyHarmonyAnalyzer(
-            hop_length=256,
-            fmin=100.0,
-            fmax=1500.0,
-            consonance_ratings={0: 1.0, 5: 0.9, 7: 0.8},
+            hop_length=256, fmin=100.0, fmax=1500.0, consonance_ratings={0: 1.0, 5: 0.9, 7: 0.8}
         )
 
         # Check that parameters are set
@@ -241,9 +220,7 @@ class TestMelodyHarmonyAnalyzer(unittest.TestCase):
         }
 
         # Create 0.5 second audio
-        short_audio = 0.5 * np.sin(
-            2 * np.pi * 440 * np.linspace(0, 0.5, int(self.sr * 0.5))
-        )
+        short_audio = 0.5 * np.sin(2 * np.pi * 440 * np.linspace(0, 0.5, int(self.sr * 0.5)))
 
         results = self.analyzer.analyze(short_audio, self.sr)
 
@@ -272,9 +249,7 @@ class TestMelodyHarmonyAnalyzer(unittest.TestCase):
 
         # Results should reflect low musical content
         if 'combined_features' in results:
-            sophistication = results['combined_features'].get(
-                'musical_sophistication', 0
-            )
+            sophistication = results['combined_features'].get('musical_sophistication', 0)
             self.assertLessEqual(sophistication, 0.5)  # Should be low for noise
 
     @patch('src.bpm_detector.melody_analyzer.MelodyAnalyzer.extract_melody')
@@ -318,9 +293,7 @@ class TestMelodyHarmonyAnalyzer(unittest.TestCase):
 
         # Should not crash even with failing callback
         try:
-            results = self.analyzer.analyze(
-                self.harmonic_audio, self.sr, progress_callback=failing_callback
-            )
+            results = self.analyzer.analyze(self.harmonic_audio, self.sr, progress_callback=failing_callback)
             # Analysis should complete despite callback failure
             self.assertIsInstance(results, dict)
         except Exception as e:

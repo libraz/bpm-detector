@@ -6,8 +6,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
-from tqdm import tqdm
-
 
 class TaskStatus(Enum):
     """Task execution status."""
@@ -58,7 +56,7 @@ class ProgressManager:
                     task.start_time = time.time()
         self._notify_update()
 
-    def complete_task(self, task_id: str, success: bool = True, error: str = None):
+    def complete_task(self, task_id: str, success: bool = True, error: Optional[str] = None):
         """Mark task as completed."""
         with self._lock:
             if task_id in self._tasks:
@@ -82,18 +80,10 @@ class ProgressManager:
     def get_status_summary(self) -> Dict[str, Any]:
         """Get status summary."""
         with self._lock:
-            completed = sum(
-                1 for t in self._tasks.values() if t.status == TaskStatus.COMPLETED
-            )
-            running = sum(
-                1 for t in self._tasks.values() if t.status == TaskStatus.RUNNING
-            )
-            failed = sum(
-                1 for t in self._tasks.values() if t.status == TaskStatus.FAILED
-            )
-            pending = sum(
-                1 for t in self._tasks.values() if t.status == TaskStatus.PENDING
-            )
+            completed = sum(1 for t in self._tasks.values() if t.status == TaskStatus.COMPLETED)
+            running = sum(1 for t in self._tasks.values() if t.status == TaskStatus.RUNNING)
+            failed = sum(1 for t in self._tasks.values() if t.status == TaskStatus.FAILED)
+            pending = sum(1 for t in self._tasks.values() if t.status == TaskStatus.PENDING)
 
             # Calculate overall progress directly to avoid recursion
             if not self._tasks:
@@ -116,11 +106,7 @@ class ProgressManager:
     def get_running_tasks(self) -> List[str]:
         """Get list of currently running task names."""
         with self._lock:
-            return [
-                task.name
-                for task in self._tasks.values()
-                if task.status == TaskStatus.RUNNING
-            ]
+            return [task.name for task in self._tasks.values() if task.status == TaskStatus.RUNNING]
 
     def get_task_details(self) -> Dict[str, TaskProgress]:
         """Get detailed task information."""
@@ -136,11 +122,9 @@ class ProgressManager:
         # Prevent infinite loops with update throttling
         current_time = time.time()
         if hasattr(self, '_last_notify_time'):
-            if (
-                current_time - self._last_notify_time < 0.1
-            ):  # 100ms throttle for smooth updates
+            if current_time - self._last_notify_time < 0.1:  # 100ms throttle for smooth updates
                 return
-        self._last_notify_time = current_time
+        self._last_notify_time: float = current_time
 
         for callback in self._callbacks:
             try:
@@ -159,14 +143,14 @@ class ProgressDisplay:
     """Base class for progress display."""
 
     def __init__(self):
-        self.last_update = 0
+        self.last_update = 0.0
         self.update_interval = 0.1  # 100ms
 
     def should_update(self) -> bool:
         """Check if display should be updated."""
         current_time = time.time()
         if current_time - self.last_update >= self.update_interval:
-            self.last_update = current_time
+            self.last_update = float(current_time)
             return True
         return False
 
@@ -176,7 +160,6 @@ class ProgressDisplay:
 
     def close(self):
         """Close display."""
-        pass
 
 
 class SimpleProgressDisplay(ProgressDisplay):
@@ -184,7 +167,7 @@ class SimpleProgressDisplay(ProgressDisplay):
 
     def __init__(self):
         super().__init__()
-        self.last_progress = -1
+        self.last_progress = -1.0
         self.update_interval = 0.2  # 200ms for smooth updates
 
     def update(self, progress_manager: ProgressManager):
@@ -195,27 +178,20 @@ class SimpleProgressDisplay(ProgressDisplay):
         # Prevent recursive calls
         if hasattr(self, '_updating') and self._updating:
             return
-        self._updating = True
+        self._updating: bool = True
 
         try:
             # Get progress data without triggering callbacks
             with progress_manager._lock:
                 overall_progress = (
-                    sum(task.progress for task in progress_manager._tasks.values())
-                    / len(progress_manager._tasks)
+                    sum(task.progress for task in progress_manager._tasks.values()) / len(progress_manager._tasks)
                     if progress_manager._tasks
                     else 0
                 )
                 running_tasks = [
-                    task.name
-                    for task in progress_manager._tasks.values()
-                    if task.status == TaskStatus.RUNNING
+                    task.name for task in progress_manager._tasks.values() if task.status == TaskStatus.RUNNING
                 ]
-                completed = sum(
-                    1
-                    for task in progress_manager._tasks.values()
-                    if task.status == TaskStatus.COMPLETED
-                )
+                completed = sum(1 for task in progress_manager._tasks.values() if task.status == TaskStatus.COMPLETED)
                 total = len(progress_manager._tasks)
 
             # Only update if progress changed significantly
@@ -236,12 +212,8 @@ class SimpleProgressDisplay(ProgressDisplay):
                 desc = f"Completed: {completed}/{total} tasks"
 
             # Clear line and show progress
-            print(
-                f"\r🔄 Progress: [{bar}] {overall_progress:5.1f}% - {desc}",
-                end="",
-                flush=True,
-            )
-            self.last_progress = overall_progress
+            print(f"\r🔄 Progress: [{bar}] {overall_progress:5.1f}% - {desc}", end="", flush=True)
+            self.last_progress = float(overall_progress)
 
         except Exception as e:
             print(f"Progress display error: {e}")
@@ -279,7 +251,7 @@ class DetailedProgressDisplay(ProgressDisplay):
         # Prevent recursive calls
         if hasattr(self, '_updating') and self._updating:
             return
-        self._updating = True
+        self._updating: bool = True
 
         try:
             # Get progress data without triggering callbacks
@@ -300,17 +272,13 @@ class DetailedProgressDisplay(ProgressDisplay):
 
                     # If task hasn't updated progress recently, estimate based on time
                     if task.progress < 90:  # Don't override near-completion progress
-                        time_based_progress = min(
-                            85, (elapsed / estimated_duration) * 100
-                        )
+                        time_based_progress = min(85, (elapsed / estimated_duration) * 100)
                         if time_based_progress > task.progress:
                             task.progress = time_based_progress
 
             # Calculate overall progress
             overall_progress = (
-                sum(task.progress for task in task_details.values()) / len(task_details)
-                if task_details
-                else 0
+                sum(task.progress for task in task_details.values()) / len(task_details) if task_details else 0
             )
 
             # Build output
@@ -376,7 +344,7 @@ class ProgressCallback:
         """Update progress."""
         self.progress_manager.update_progress(self.task_id, progress, message)
 
-    def complete(self, success: bool = True, error: str = None):
+    def complete(self, success: bool = True, error: Optional[str] = None):
         """Mark task as completed."""
         self.progress_manager.complete_task(self.task_id, success, error)
 

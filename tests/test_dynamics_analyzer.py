@@ -1,7 +1,6 @@
 """Tests for dynamics analyzer module."""
 
 import unittest
-from unittest.mock import MagicMock, patch
 
 import numpy as np
 
@@ -33,9 +32,7 @@ class TestDynamicsAnalyzer(unittest.TestCase):
 
         # Ensure envelope matches audio length
         if len(envelope) != len(t):
-            envelope = np.interp(
-                np.linspace(0, 1, len(t)), np.linspace(0, 1, len(envelope)), envelope
-            )
+            envelope = np.interp(np.linspace(0, 1, len(t)), np.linspace(0, 1, len(envelope)), envelope)
 
         self.dynamic_audio = envelope * np.sin(2 * np.pi * 440 * t)
 
@@ -47,13 +44,7 @@ class TestDynamicsAnalyzer(unittest.TestCase):
         features = self.analyzer.extract_energy_features(self.dynamic_audio, self.sr)
 
         # Check required features
-        expected_features = [
-            'rms',
-            'spectral_energy',
-            'zero_crossing_rate',
-            'spectral_centroid',
-            'spectral_rolloff',
-        ]
+        expected_features = ['rms', 'spectral_energy', 'zero_crossing_rate', 'spectral_centroid', 'spectral_rolloff']
         for feature in expected_features:
             self.assertIn(feature, features)
             self.assertIsInstance(features[feature], np.ndarray)
@@ -69,12 +60,7 @@ class TestDynamicsAnalyzer(unittest.TestCase):
         dynamic_range = self.analyzer.calculate_dynamic_range(features['rms'])
 
         # Check required fields
-        expected_fields = [
-            'dynamic_range_db',
-            'crest_factor',
-            'rms_std',
-            'peak_to_average',
-        ]
+        expected_fields = ['dynamic_range_db', 'crest_factor', 'rms_std', 'peak_to_average']
         for field in expected_fields:
             self.assertIn(field, dynamic_range)
             self.assertIsInstance(dynamic_range[field], (int, float))
@@ -86,27 +72,18 @@ class TestDynamicsAnalyzer(unittest.TestCase):
         self.assertGreaterEqual(dynamic_range['crest_factor'], 1.0)
 
         # Compare with constant audio
-        const_features = self.analyzer.extract_energy_features(
-            self.constant_audio, self.sr
-        )
+        const_features = self.analyzer.extract_energy_features(self.constant_audio, self.sr)
         const_range = self.analyzer.calculate_dynamic_range(const_features['rms'])
 
         # Dynamic audio should have larger dynamic range
-        self.assertGreater(
-            dynamic_range['dynamic_range_db'], const_range['dynamic_range_db']
-        )
+        self.assertGreater(dynamic_range['dynamic_range_db'], const_range['dynamic_range_db'])
 
     def test_analyze_loudness(self):
         """Test loudness analysis."""
         loudness = self.analyzer.analyze_loudness(self.dynamic_audio, self.sr)
 
         # Check required fields
-        expected_fields = [
-            'perceived_loudness',
-            'peak_loudness',
-            'average_loudness',
-            'loudness_range',
-        ]
+        expected_fields = ['perceived_loudness', 'peak_loudness', 'average_loudness', 'loudness_range']
         for field in expected_fields:
             self.assertIn(field, loudness)
             self.assertIsInstance(loudness[field], (int, float))
@@ -122,9 +99,7 @@ class TestDynamicsAnalyzer(unittest.TestCase):
 
     def test_calculate_perceived_loudness(self):
         """Test perceived loudness calculation."""
-        perceived = self.analyzer._calculate_perceived_loudness(
-            self.dynamic_audio, self.sr
-        )
+        perceived = self.analyzer._calculate_perceived_loudness(self.dynamic_audio, self.sr)
 
         # Should return a positive number
         self.assertIsInstance(perceived, (int, float))
@@ -132,9 +107,7 @@ class TestDynamicsAnalyzer(unittest.TestCase):
 
         # Louder audio should have higher perceived loudness
         loud_audio = 2.0 * self.dynamic_audio
-        loud_perceived = self.analyzer._calculate_perceived_loudness(
-            loud_audio, self.sr
-        )
+        loud_perceived = self.analyzer._calculate_perceived_loudness(loud_audio, self.sr)
         self.assertGreater(loud_perceived, perceived)
 
     def test_generate_energy_profile(self):
@@ -143,12 +116,7 @@ class TestDynamicsAnalyzer(unittest.TestCase):
         profile = self.analyzer.generate_energy_profile(features, window_size=1.0)
 
         # Check required fields
-        expected_fields = [
-            'time_points',
-            'energy_curve',
-            'smoothed_energy',
-            'energy_derivative',
-        ]
+        expected_fields = ['time_points', 'energy_curve', 'smoothed_energy', 'energy_derivative']
         for field in expected_fields:
             self.assertIn(field, profile)
             self.assertIsInstance(profile[field], np.ndarray)
@@ -163,19 +131,12 @@ class TestDynamicsAnalyzer(unittest.TestCase):
     def test_detect_climax_points(self):
         """Test climax point detection."""
         features = self.analyzer.extract_energy_features(self.dynamic_audio, self.sr)
-        climax_points = self.analyzer.detect_climax_points(
-            features, prominence_threshold=0.1
-        )
+        climax_points = self.analyzer.detect_climax_points(features, prominence_threshold=0.1)
 
         # Check structure
         self.assertIsInstance(climax_points, dict)
 
-        expected_fields = [
-            'climax_times',
-            'climax_energies',
-            'main_climax',
-            'climax_count',
-        ]
+        expected_fields = ['climax_times', 'climax_energies', 'main_climax', 'climax_count']
         for field in expected_fields:
             self.assertIn(field, climax_points)
 
@@ -184,9 +145,7 @@ class TestDynamicsAnalyzer(unittest.TestCase):
         self.assertIsInstance(climax_points['climax_energies'], np.ndarray)
 
         # Should have same number of times and energies
-        self.assertEqual(
-            len(climax_points['climax_times']), len(climax_points['climax_energies'])
-        )
+        self.assertEqual(len(climax_points['climax_times']), len(climax_points['climax_energies']))
 
         # Main climax should be a time value
         if climax_points['climax_count'] > 0:
@@ -199,13 +158,7 @@ class TestDynamicsAnalyzer(unittest.TestCase):
         tension = self.analyzer.analyze_tension_curve(features, window_size=1.0)
 
         # Check required fields
-        expected_fields = [
-            'tension_curve',
-            'tension_peaks',
-            'tension_valleys',
-            'average_tension',
-            'tension_variance',
-        ]
+        expected_fields = ['tension_curve', 'tension_peaks', 'tension_valleys', 'average_tension', 'tension_variance']
         for field in expected_fields:
             self.assertIn(field, tension)
 
@@ -243,18 +196,12 @@ class TestDynamicsAnalyzer(unittest.TestCase):
 
         # Ratios should sum to approximately 1
         total_ratio = (
-            distribution['low_energy_ratio']
-            + distribution['mid_energy_ratio']
-            + distribution['high_energy_ratio']
+            distribution['low_energy_ratio'] + distribution['mid_energy_ratio'] + distribution['high_energy_ratio']
         )
         self.assertAlmostEqual(total_ratio, 1.0, places=2)
 
         # All ratios should be between 0 and 1
-        for ratio_field in [
-            'low_energy_ratio',
-            'mid_energy_ratio',
-            'high_energy_ratio',
-        ]:
+        for ratio_field in ['low_energy_ratio', 'mid_energy_ratio', 'high_energy_ratio']:
             self.assertGreaterEqual(distribution[ratio_field], 0.0)
             self.assertLessEqual(distribution[ratio_field], 1.0)
 
@@ -266,12 +213,7 @@ class TestDynamicsAnalyzer(unittest.TestCase):
         # Check structure
         self.assertIsInstance(events, dict)
 
-        expected_fields = [
-            'sudden_increases',
-            'sudden_decreases',
-            'sustained_peaks',
-            'quiet_sections',
-        ]
+        expected_fields = ['sudden_increases', 'sudden_decreases', 'sustained_peaks', 'quiet_sections']
         for field in expected_fields:
             self.assertIn(field, events)
             self.assertIsInstance(events[field], list)
@@ -332,9 +274,7 @@ class TestDynamicsAnalyzer(unittest.TestCase):
     def test_short_audio_handling(self):
         """Test handling of very short audio."""
         # Create 0.5 second audio
-        short_audio = 0.5 * np.sin(
-            2 * np.pi * 440 * np.linspace(0, 0.5, int(self.sr * 0.5))
-        )
+        short_audio = 0.5 * np.sin(2 * np.pi * 440 * np.linspace(0, 0.5, int(self.sr * 0.5)))
 
         results = self.analyzer.analyze(short_audio, self.sr)
 

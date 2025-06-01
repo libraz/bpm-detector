@@ -143,22 +143,22 @@ from typing import Dict, Any
 
 class NewAnalyzer:
     """New analysis functionality."""
-    
+
     def __init__(self, hop_length: int = 128):
         """Initialize analyzer.
-        
+
         Args:
             hop_length: Hop length for analysis
         """
         self.hop_length = hop_length
-    
+
     def analyze(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
         """Perform analysis.
-        
+
         Args:
             y: Audio signal
             sr: Sample rate
-            
+
         Returns:
             Analysis results dictionary
         """
@@ -201,26 +201,26 @@ from src.bpm_detector.new_analyzer import NewAnalyzer
 
 class TestNewAnalyzer(unittest.TestCase):
     """Test cases for NewAnalyzer."""
-    
+
     def setUp(self):
         """Set up test fixtures."""
         self.analyzer = NewAnalyzer()
         self.sr = 22050
         self.test_signal = np.random.randn(self.sr * 5)  # 5 seconds
-    
+
     def test_basic_functionality(self):
         """Test basic analysis functionality."""
         result = self.analyzer.analyze(self.test_signal, self.sr)
-        
+
         # Check result structure
         self.assertIsInstance(result, dict)
         self.assertIn('expected_key', result)
-        
+
     def test_empty_input(self):
         """Test behavior with empty input."""
         empty_signal = np.array([])
         result = self.analyzer.analyze(empty_signal, self.sr)
-        
+
         # Should handle gracefully
         self.assertIsInstance(result, dict)
 ```
@@ -329,29 +329,29 @@ mypy src/
 
 ```python
 def analyze_chord_progression(
-    chroma: np.ndarray, 
-    sr: int, 
+    chroma: np.ndarray,
+    sr: int,
     hop_length: int = 128
 ) -> Dict[str, Any]:
     """Analyze chord progression from chroma features.
-    
+
     Args:
         chroma: Chroma feature matrix (12 x n_frames)
         sr: Sample rate in Hz
         hop_length: Hop length for frame timing
-        
+
     Returns:
         Dictionary containing:
             - main_progression: List of chord names
             - complexity: Complexity score (0-1)
             - confidence: Detection confidence (0-1)
-            
+
     Raises:
         ValueError: If chroma matrix has wrong dimensions
     """
     if chroma.shape[0] != 12:
         raise ValueError(f"Expected 12 chroma bins, got {chroma.shape[0]}")
-    
+
     # Implementation here
     return {
         'main_progression': [],

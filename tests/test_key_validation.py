@@ -19,9 +19,7 @@ class TestKeyValidator(unittest.TestCase):
         chroma_mean[7] = 0.6  # G
         chroma_mean[9] = 0.7  # A
 
-        validated_key, validated_mode, confidence = KeyValidator.validate_relative_keys(
-            'C', 'Major', 0.8, chroma_mean
-        )
+        validated_key, validated_mode, confidence = KeyValidator.validate_relative_keys('C', 'Major', 0.8, chroma_mean)
 
         # Should return validation results
         self.assertIsInstance(validated_key, str)
@@ -69,9 +67,7 @@ class TestJPOPKeyDetector(unittest.TestCase):
         chroma_mean = np.zeros(12)
         chroma_mean[0] = 1.0  # Strong C
 
-        jpop_result = JPOPKeyDetector.detect_jpop_keys(
-            chroma_mean, correlations, enable_jpop=True
-        )
+        jpop_result = JPOPKeyDetector.detect_jpop_keys(chroma_mean, correlations, enable_jpop=True)
 
         # Should return key detection result
         self.assertIsInstance(jpop_result, tuple)
@@ -92,13 +88,9 @@ class TestJPOPKeyDetector(unittest.TestCase):
         chroma_mean[1] = 0.6  # C#
 
         correlations = [0.3] * 24
-        key_names = [f"Note{i} Major" for i in range(12)] + [
-            f"Note{i} Minor" for i in range(12)
-        ]
+        key_names = [f"Note{i} Major" for i in range(12)] + [f"Note{i} Minor" for i in range(12)]
 
-        result = JPOPKeyDetector.detect_jpop_keys(
-            chroma_mean, correlations, key_names=key_names
-        )
+        result = JPOPKeyDetector.detect_jpop_keys(chroma_mean, correlations, key_names=key_names)
 
         key, mode, confidence = result
         self.assertIsInstance(key, str)

@@ -1,12 +1,11 @@
 """Similarity calculation and feature vector generation engine."""
 
-import json
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
-from sklearn.preprocessing import MinMaxScaler, StandardScaler
+from sklearn.preprocessing import StandardScaler
 
 
 class SimilarityEngine:
@@ -77,7 +76,8 @@ class SimilarityEngine:
         dynamic_features = self._extract_dynamic_features(analysis_results)
         features.extend(dynamic_features)
 
-        return np.array(features, dtype=np.float32)
+        result: np.ndarray = np.array(features, dtype=np.float32)
+        return result
 
     def _key_to_numeric(self, key: str) -> float:
         """Convert key to numeric representation.
@@ -115,9 +115,7 @@ class SimilarityEngine:
         # Combine note and mode into single value
         return (note_num + mode_num * 12) / 24.0
 
-    def _extract_harmonic_features(
-        self, analysis_results: Dict[str, Any]
-    ) -> List[float]:
+    def _extract_harmonic_features(self, analysis_results: Dict[str, Any]) -> List[float]:
         """Extract harmonic features.
 
         Args:
@@ -135,8 +133,7 @@ class SimilarityEngine:
                 chord_analysis.get('harmonic_rhythm', 0.0) / 5.0,  # Normalize
                 chord_analysis.get('chord_complexity', 0.0),
                 chord_analysis.get('substitute_chords_ratio', 0.0),
-                len(chord_analysis.get('modulations', []))
-                / 5.0,  # Normalize modulation count
+                len(chord_analysis.get('modulations', [])) / 5.0,  # Normalize modulation count
             ]
         )
 
@@ -156,9 +153,7 @@ class SimilarityEngine:
 
         return features
 
-    def _extract_rhythmic_features(
-        self, analysis_results: Dict[str, Any]
-    ) -> List[float]:
+    def _extract_rhythmic_features(self, analysis_results: Dict[str, Any]) -> List[float]:
         """Extract rhythmic features.
 
         Args:
@@ -189,9 +184,7 @@ class SimilarityEngine:
 
         # Groove type encoding
         groove_type = rhythm_analysis.get('groove_type', 'straight')
-        groove_numeric = {'straight': 0.0, 'shuffle': 0.5, 'swing': 1.0}.get(
-            groove_type, 0.0
-        )
+        groove_numeric = {'straight': 0.0, 'shuffle': 0.5, 'swing': 1.0}.get(groove_type, 0.0)
         features.append(groove_numeric)
 
         return features
@@ -205,21 +198,10 @@ class SimilarityEngine:
         Returns:
             Numeric representation
         """
-        time_sig_map = {
-            '4/4': 0.0,
-            '3/4': 0.2,
-            '2/4': 0.4,
-            '6/8': 0.6,
-            '9/8': 0.7,
-            '12/8': 0.8,
-            '5/4': 0.9,
-            '7/8': 1.0,
-        }
+        time_sig_map = {'4/4': 0.0, '3/4': 0.2, '2/4': 0.4, '6/8': 0.6, '9/8': 0.7, '12/8': 0.8, '5/4': 0.9, '7/8': 1.0}
         return time_sig_map.get(time_sig, 0.0)
 
-    def _extract_timbral_features(
-        self, analysis_results: Dict[str, Any]
-    ) -> List[float]:
+    def _extract_timbral_features(self, analysis_results: Dict[str, Any]) -> List[float]:
         """Extract timbral features.
 
         Args:
@@ -277,9 +259,7 @@ class SimilarityEngine:
 
         return features
 
-    def _extract_structural_features(
-        self, analysis_results: Dict[str, Any]
-    ) -> List[float]:
+    def _extract_structural_features(self, analysis_results: Dict[str, Any]) -> List[float]:
         """Extract structural features.
 
         Args:
@@ -312,16 +292,12 @@ class SimilarityEngine:
                 section_counts[stype] += 1
 
         total_sections = len(sections) if sections else 1
-        section_ratios = [
-            section_counts[stype] / total_sections for stype in section_types
-        ]
+        section_ratios = [section_counts[stype] / total_sections for stype in section_types]
         features.extend(section_ratios)
 
         return features
 
-    def _extract_melodic_features(
-        self, analysis_results: Dict[str, Any]
-    ) -> List[float]:
+    def _extract_melodic_features(self, analysis_results: Dict[str, Any]) -> List[float]:
         """Extract melodic features.
 
         Args:
@@ -377,17 +353,12 @@ class SimilarityEngine:
 
         # Melody presence
         features.extend(
-            [
-                1.0 if melody_harmony.get('melody_present', False) else 0.0,
-                melody_harmony.get('melody_coverage', 0.0),
-            ]
+            [1.0 if melody_harmony.get('melody_present', False) else 0.0, melody_harmony.get('melody_coverage', 0.0)]
         )
 
         return features
 
-    def _extract_dynamic_features(
-        self, analysis_results: Dict[str, Any]
-    ) -> List[float]:
+    def _extract_dynamic_features(self, analysis_results: Dict[str, Any]) -> List[float]:
         """Extract dynamic features.
 
         Args:
@@ -421,12 +392,7 @@ class SimilarityEngine:
         )
 
         # Energy characteristics
-        features.extend(
-            [
-                dynamics_analysis.get('overall_energy', 0.0),
-                dynamics_analysis.get('energy_variance', 0.0),
-            ]
-        )
+        features.extend([dynamics_analysis.get('overall_energy', 0.0), dynamics_analysis.get('energy_variance', 0.0)])
 
         # Energy distribution
         energy_dist = dynamics_analysis.get('energy_distribution', {})
@@ -444,11 +410,7 @@ class SimilarityEngine:
         features.extend(
             [
                 len(climax_points) / 5.0,  # Normalize climax count
-                (
-                    np.mean([cp.get('intensity', 0.0) for cp in climax_points])
-                    if climax_points
-                    else 0.0
-                ),
+                (np.mean([cp.get('intensity', 0.0) for cp in climax_points]) if climax_points else 0.0),
             ]
         )
 
@@ -481,17 +443,17 @@ class SimilarityEngine:
         """
         if not self.is_fitted:
             # If scaler not fitted, use simple min-max normalization
-            return np.clip(feature_vector, 0, 1)
+            result: np.ndarray = np.clip(feature_vector, 0, 1)
+            return result
 
         # Reshape for sklearn
         features_2d = feature_vector.reshape(1, -1)
         normalized = self.scaler.transform(features_2d)
 
-        return normalized.flatten()
+        normalized_result: np.ndarray = normalized.flatten()
+        return normalized_result
 
-    def calculate_similarity(
-        self, vector1: np.ndarray, vector2: np.ndarray, method: str = 'cosine'
-    ) -> float:
+    def calculate_similarity(self, vector1: np.ndarray, vector2: np.ndarray, method: str = 'cosine') -> float:
         """Calculate similarity between two feature vectors.
 
         Args:
@@ -525,9 +487,7 @@ class SimilarityEngine:
         else:
             raise ValueError(f"Unknown similarity method: {method}")
 
-    def _calculate_weighted_similarity(
-        self, vector1: np.ndarray, vector2: np.ndarray
-    ) -> float:
+    def _calculate_weighted_similarity(self, vector1: np.ndarray, vector2: np.ndarray) -> float:
         """Calculate weighted similarity based on feature categories.
 
         Args:
@@ -613,9 +573,7 @@ class SimilarityEngine:
 
         return similarities[:top_k]
 
-    def generate_similarity_matrix(
-        self, feature_vectors: List[np.ndarray], method: str = 'cosine'
-    ) -> np.ndarray:
+    def generate_similarity_matrix(self, feature_vectors: List[np.ndarray], method: str = 'cosine') -> np.ndarray:
         """Generate similarity matrix for a collection of feature vectors.
 
         Args:
@@ -633,13 +591,12 @@ class SimilarityEngine:
                 if i == j:
                     similarity_matrix[i, j] = 1.0
                 else:
-                    similarity = self.calculate_similarity(
-                        feature_vectors[i], feature_vectors[j], method
-                    )
+                    similarity = self.calculate_similarity(feature_vectors[i], feature_vectors[j], method)
                     similarity_matrix[i, j] = similarity
                     similarity_matrix[j, i] = similarity  # Symmetric
 
-        return similarity_matrix
+        result: np.ndarray = similarity_matrix
+        return result
 
     def reduce_dimensionality(
         self, feature_vectors: List[np.ndarray], n_components: int = 50
@@ -665,9 +622,7 @@ class SimilarityEngine:
 
         return reduced_features, pca
 
-    def export_feature_vector(
-        self, feature_vector: np.ndarray, metadata: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def export_feature_vector(self, feature_vector: np.ndarray, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """Export feature vector with metadata for storage.
 
         Args:
@@ -685,9 +640,7 @@ class SimilarityEngine:
             'version': '1.0',
         }
 
-    def import_feature_vector(
-        self, exported_data: Dict[str, Any]
-    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+    def import_feature_vector(self, exported_data: Dict[str, Any]) -> Tuple[np.ndarray, Dict[str, Any]]:
         """Import feature vector from exported data.
 
         Args:

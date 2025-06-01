@@ -5,15 +5,15 @@ Optimized BPM Detector Performance Demo
 This script demonstrates the performance of the optimized BPM detector with enhanced settings.
 """
 
-import time
 import sys
+import time
 from pathlib import Path
 
 # Add the src directory to the path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from bpm_detector.parallel_analyzer import SmartParallelAudioAnalyzer
 from bpm_detector.music_analyzer import AudioAnalyzer
+from bpm_detector.parallel_analyzer import SmartParallelAudioAnalyzer
 
 
 def benchmark_analysis(audio_file: str, iterations: int = 3):
@@ -33,9 +33,7 @@ def benchmark_analysis(audio_file: str, iterations: int = 3):
         start_time = time.time()
 
         try:
-            standard_analyzer.analyze_file(
-                audio_file, comprehensive=True, detect_key=True
-            )
+            standard_analyzer.analyze_file(audio_file, comprehensive=True, detect_key=True)
             elapsed = time.time() - start_time
             standard_times.append(elapsed)
             print(f"✅ {elapsed:.2f}s")
@@ -142,9 +140,7 @@ def demo_multiple_files():
     start_time = time.time()
 
     try:
-        results = analyzer.analyze_file(
-            test_files, comprehensive=True, progress_callback=progress_callback
-        )
+        results = analyzer.analyze_file(test_files, comprehensive=True, progress_callback=progress_callback)
 
         elapsed = time.time() - start_time
         print(f"\n✅ Complete! Total processing time: {elapsed:.2f}s")

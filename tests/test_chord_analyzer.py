@@ -2,7 +2,6 @@
 
 import unittest
 
-import librosa
 import numpy as np
 
 from src.bpm_detector.chord_analyzer import ChordProgressionAnalyzer
@@ -61,12 +60,7 @@ class TestChordProgressionAnalyzer(unittest.TestCase):
     def test_analyze_progression(self):
         """Test chord progression analysis."""
         # Create mock chord list
-        mock_chords = [
-            ('C', 0.8, 0, 10),
-            ('Am', 0.7, 10, 20),
-            ('F', 0.9, 20, 30),
-            ('G', 0.8, 30, 40),
-        ]
+        mock_chords = [('C', 0.8, 0, 10), ('Am', 0.7, 10, 20), ('F', 0.9, 20, 30), ('G', 0.8, 30, 40)]
 
         result = self.analyzer.analyze_progression(mock_chords)
 
@@ -224,9 +218,7 @@ class TestChordProgressionAnalyzer(unittest.TestCase):
         # Test with chord progression that includes substitutes
         chord_names = ['C', 'A7', 'Dm', 'G7']  # A7 is a substitute for Am
 
-        substitute_ratio = self.analyzer._calculate_substitute_ratio(
-            chord_names, 'C Major'
-        )
+        substitute_ratio = self.analyzer._calculate_substitute_ratio(chord_names, 'C Major')
 
         self.assertIsInstance(substitute_ratio, (int, float))
         self.assertGreaterEqual(substitute_ratio, 0.0)

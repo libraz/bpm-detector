@@ -10,6 +10,7 @@ wheels/
 .htmlcov/
 .coverage.*
 examples/*.mp3
+coverage.xml
 
 # venv
 .venv

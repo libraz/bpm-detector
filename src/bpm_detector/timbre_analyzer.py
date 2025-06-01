@@ -1,6 +1,6 @@
 """Timbre and instrument analysis module."""
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -197,9 +197,7 @@ class TimbreAnalyzer:
         }
 
     # Backward compatibility methods for existing tests
-    def _filter_redundant_instruments(
-        self, instruments: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    def _filter_redundant_instruments(self, instruments: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Filter out redundant instrument detections (backward compatibility)."""
         return self.instrument_classifier._filter_redundant_instruments(instruments)
 
@@ -207,34 +205,26 @@ class TimbreAnalyzer:
         self,
         magnitude: np.ndarray,
         freqs: np.ndarray,
-        freq_range: tuple = None,
-        low_freq: float = None,
-        high_freq: float = None,
-        instrument: str = None,
-        harmonic: np.ndarray = None,
-        percussive: np.ndarray = None,
+        freq_range: Optional[Tuple[float, float]] = None,
+        low_freq: Optional[float] = None,
+        high_freq: Optional[float] = None,
+        instrument: Optional[str] = None,
+        harmonic: Optional[np.ndarray] = None,
+        percussive: Optional[np.ndarray] = None,
         spectral_shape=None,
     ) -> float:
         """Calculate confidence for instrument presence (backward compatibility)."""
         return self.instrument_classifier._calculate_instrument_confidence(
-            magnitude,
-            freqs,
-            freq_range,
-            low_freq,
-            high_freq,
-            instrument,
-            harmonic,
-            percussive,
-            spectral_shape,
+            magnitude, freqs, freq_range, low_freq, high_freq, instrument, harmonic, percussive, spectral_shape
         )
 
     def _calculate_instrument_prominence(
         self,
         magnitude: np.ndarray,
         freqs: np.ndarray,
-        freq_range: tuple = None,
-        low_freq: float = None,
-        high_freq: float = None,
+        freq_range: Optional[Tuple[float, float]] = None,
+        low_freq: Optional[float] = None,
+        high_freq: Optional[float] = None,
     ) -> float:
         """Calculate instrument prominence in the mix (backward compatibility)."""
         return self.instrument_classifier._calculate_instrument_prominence(

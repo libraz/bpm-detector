@@ -8,7 +8,7 @@ from .harmony_analyzer import HarmonyAnalyzer
 from .key_detector import KeyDetector as EnhancedKeyDetector
 from .melody_analyzer import MelodyAnalyzer
 from .melody_harmony_analyzer import MelodyHarmonyAnalyzer
-from .music_analyzer import AudioAnalyzer, BPMDetector, KeyDetector
+from .music_analyzer import AudioAnalyzer, BPMDetector
 from .parallel_analyzer import SmartParallelAudioAnalyzer
 from .progress_manager import ProgressManager, create_progress_display
 from .rhythm_analyzer import RhythmAnalyzer
@@ -23,7 +23,7 @@ __email__ = "libraz@libraz.net"
 __all__ = [
     "AudioAnalyzer",
     "BPMDetector",
-    "KeyDetector",
+    "EnhancedKeyDetector",
     "ChordProgressionAnalyzer",
     "StructureAnalyzer",
     "RhythmAnalyzer",
@@ -31,7 +31,6 @@ __all__ = [
     "MelodyHarmonyAnalyzer",
     "MelodyAnalyzer",
     "HarmonyAnalyzer",
-    "EnhancedKeyDetector",
     "DynamicsAnalyzer",
     "SimilarityEngine",
     "SmartParallelAudioAnalyzer",
@@ -42,6 +41,9 @@ __all__ = [
     "create_progress_display",
     "main",
 ]
+
+# Backward compatibility alias
+KeyDetector = EnhancedKeyDetector
 
 
 def hello() -> str:

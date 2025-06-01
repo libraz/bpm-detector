@@ -13,11 +13,7 @@ from .music_theory import CONSONANCE_RATINGS
 class HarmonyAnalyzer:
     """Analyzes harmonic content and characteristics."""
 
-    def __init__(
-        self,
-        hop_length: int = 512,
-        consonance_ratings: Optional[Dict[int, float]] = None,
-    ):
+    def __init__(self, hop_length: int = 512, consonance_ratings: Optional[Dict[int, float]] = None):
         """Initialize harmony analyzer.
 
         Args:
@@ -71,35 +67,29 @@ class HarmonyAnalyzer:
         stft = librosa.stft(y, hop_length=self.hop_length)
         spectral_complexity = np.std(np.abs(stft)) / (np.mean(np.abs(stft)) + 1e-8)
 
-        # Overall harmonic complexity - サイレンス処理を改善
-        if np.sum(chroma_mean) < 1e-6:  # ほぼサイレンス
+        # Overall harmonic complexity - improved silence handling
+        if np.sum(chroma_mean) < 1e-6:  # Nearly silent
             harmonic_complexity = 0.0
         else:
             harmonic_complexity = (
-                normalized_entropy
-                + min(1.0, harmonic_variance)
-                + min(1.0, spectral_complexity)
+                normalized_entropy + min(1.0, harmonic_variance) + min(1.0, spectral_complexity)
             ) / 3.0
 
         # Calculate harmonic change rate for complexity analysis
         if chroma.shape[1] > 1:
             chroma_diffs = np.diff(chroma, axis=1)
             change_magnitudes = np.sqrt(np.sum(chroma_diffs**2, axis=0))
-            harmonic_change_rate = np.mean(change_magnitudes)
+            harmonic_change_rate = float(np.mean(change_magnitudes))
         else:
             harmonic_change_rate = 0.0
 
         return {
             'harmonic_entropy': float(normalized_entropy),
-            'spectral_entropy': float(
-                normalized_entropy
-            ),  # Field name expected by tests
+            'spectral_entropy': float(normalized_entropy),  # Field name expected by tests
             'harmonic_variance': float(harmonic_variance),
             'harmonic_complexity': float(harmonic_complexity),
-            'harmonic_change_rate': float(
-                harmonic_change_rate
-            ),  # Field name expected by tests
-            'spectral_complexity': float(min(1.0, spectral_complexity)),
+            'harmonic_change_rate': float(harmonic_change_rate),  # Field name expected by tests
+            'spectral_complexity': float(np.clip(spectral_complexity, 0.0, 1.0)),
         }
 
     def analyze_consonance(self, y: np.ndarray, sr: int) -> Dict[str, float]:
@@ -132,7 +122,7 @@ class HarmonyAnalyzer:
             frame_chroma = chroma[:, frame]
 
             # Use adaptive threshold based on frame energy
-            frame_energy = np.sum(frame_chroma)
+            frame_energy = float(np.sum(frame_chroma))
             if frame_energy < 0.1:  # Very low energy frame
                 consonance_scores.append(0.3)  # Low consonance for noise/silence
                 continue
@@ -155,9 +145,7 @@ class HarmonyAnalyzer:
                     consonance = self.consonance_ratings.get(interval, 0.6)
 
                     # Weight by note strengths (geometric mean for better balance)
-                    weight = np.sqrt(
-                        frame_chroma[active_notes[i]] * frame_chroma[active_notes[j]]
-                    )
+                    weight = np.sqrt(frame_chroma[active_notes[i]] * frame_chroma[active_notes[j]])
                     frame_consonance.append(consonance * weight)
                     total_weight += weight
 
@@ -191,9 +179,7 @@ class HarmonyAnalyzer:
             'consonance_score': float(consonance_level),  # Field name expected by tests
             'dissonance_level': float(dissonance_level),
             'dissonance_score': float(dissonance_level),  # Field name expected by tests
-            'interval_consonance': float(
-                consonance_level
-            ),  # Field name expected by tests
+            'interval_consonance': float(consonance_level),  # Field name expected by tests
             'harmonic_tension': float(harmonic_tension),
         }
 
@@ -225,43 +211,30 @@ class HarmonyAnalyzer:
 
         # Calculate harmonic change rate
         total_time = chroma.shape[1] * self.hop_length / sr
-        harmonic_change_rate = (
-            np.sum(change_magnitudes > np.std(change_magnitudes)) / total_time
-        )
+        harmonic_change_rate = np.sum(change_magnitudes > np.std(change_magnitudes)) / total_time
 
         # Calculate harmonic stability (inverse of change variance)
         # Scale down for more realistic values when there are significant changes
         change_variance = np.var(change_magnitudes)
         if np.mean(change_magnitudes) > 0.5:  # Significant harmonic changes
-            harmonic_stability = 1.0 / (
-                1.0 + change_variance * 2.0
-            )  # More sensitive to changes
+            harmonic_stability = 1.0 / (1.0 + change_variance * 2.0)  # More sensitive to changes
         else:
             harmonic_stability = 1.0 / (1.0 + change_variance)
 
         # Calculate rhythm regularity
+        rhythm_regularity: float = 0.0
         if len(change_magnitudes) > 4:
             # Find peaks in change magnitudes (harmonic changes)
             peaks, _ = find_peaks(change_magnitudes, height=np.mean(change_magnitudes))
 
             if len(peaks) > 2:
                 peak_intervals = np.diff(peaks)
-                rhythm_regularity = 1.0 / (
-                    1.0 + np.std(peak_intervals) / (np.mean(peak_intervals) + 1e-8)
-                )
-            else:
-                rhythm_regularity = 0.0
-        else:
-            rhythm_regularity = 0.0
+                rhythm_regularity = float(1.0 / (1.0 + np.std(peak_intervals) / (np.mean(peak_intervals) + 1e-8)))
 
         return {
             'harmonic_change_rate': float(harmonic_change_rate),
-            'chord_change_rate': float(
-                harmonic_change_rate
-            ),  # Field name expected by tests
-            'harmonic_rhythm': float(
-                harmonic_change_rate
-            ),  # Field name expected by tests
+            'chord_change_rate': float(harmonic_change_rate),  # Field name expected by tests
+            'harmonic_rhythm': float(harmonic_change_rate),  # Field name expected by tests
             'harmonic_stability': float(harmonic_stability),
             'harmonic_rhythm_regularity': float(rhythm_regularity),
         }

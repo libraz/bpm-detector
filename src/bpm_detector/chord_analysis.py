@@ -1,6 +1,6 @@
 """Chord progression analysis for key detection."""
 
-from typing import Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 
@@ -12,7 +12,7 @@ class ChordProgressionAnalyzer:
 
     @staticmethod
     def validate_key_with_chord_analysis(
-        chroma_mean: np.ndarray, key_note: str, mode: str, confidence: float = None
+        chroma_mean: np.ndarray, key_note: str, mode: str, confidence: Optional[float] = None
     ) -> Tuple[str, str, float]:
         """Validate detected key using chord progression analysis.
 
@@ -45,12 +45,7 @@ class ChordProgressionAnalyzer:
                 (key_index + 6) % 12,  # v (minor dominant)
             ]
             # Add harmonic minor chords (very common in J-Pop)
-            expected_chords.extend(
-                [
-                    (key_index + 2) % 12,  # ii (supertonic)
-                    (key_index + 5) % 12,  # iv (subdominant)
-                ]
-            )
+            expected_chords.extend([(key_index + 2) % 12, (key_index + 5) % 12])  # ii (supertonic)  # iv (subdominant)
         else:  # Major
             # Common major key chord progressions
             # I, IV, V, vi
@@ -110,22 +105,14 @@ class ChordProgressionAnalyzer:
             tonic_note = NOTE_NAMES[tonic_idx]
 
             # Test minor key progressions (common in J-Pop)
-            minor_confidence = (
-                ChordProgressionAnalyzer._analyze_minor_chord_progression(
-                    chroma_mean, tonic_idx
-                )
-            )
+            minor_confidence = ChordProgressionAnalyzer._analyze_minor_chord_progression(chroma_mean, tonic_idx)
             if minor_confidence > best_confidence:
                 best_confidence = minor_confidence
                 best_key = tonic_note
                 best_mode = 'Minor'
 
             # Test major key progressions
-            major_confidence = (
-                ChordProgressionAnalyzer._analyze_major_chord_progression(
-                    chroma_mean, tonic_idx
-                )
-            )
+            major_confidence = ChordProgressionAnalyzer._analyze_major_chord_progression(chroma_mean, tonic_idx)
             if major_confidence > best_confidence:
                 best_confidence = major_confidence
                 best_key = tonic_note
@@ -134,9 +121,7 @@ class ChordProgressionAnalyzer:
         return best_key, best_mode, best_confidence
 
     @staticmethod
-    def _analyze_minor_chord_progression(
-        chroma_mean: np.ndarray, tonic_idx: int
-    ) -> float:
+    def _analyze_minor_chord_progression(chroma_mean: np.ndarray, tonic_idx: int) -> float:
         """Analyze minor key chord progression patterns.
 
         Focuses on i–♭III7–IVsus4–V7 and similar progressions common in J-Pop.
@@ -187,9 +172,7 @@ class ChordProgressionAnalyzer:
         return 0.0
 
     @staticmethod
-    def _analyze_major_chord_progression(
-        chroma_mean: np.ndarray, tonic_idx: int
-    ) -> float:
+    def _analyze_major_chord_progression(chroma_mean: np.ndarray, tonic_idx: int) -> float:
         """Analyze major key chord progression patterns.
 
         Args:
@@ -206,12 +189,7 @@ class ChordProgressionAnalyzer:
         vi = (tonic_idx + 9) % 12  # vi (relative minor)
 
         # Weight chord presence
-        chord_weights = {
-            chord_i: 3.0,  # Tonic
-            V: 2.5,  # Dominant
-            IV: 2.0,  # Subdominant
-            vi: 1.5,  # Relative minor
-        }
+        chord_weights = {chord_i: 3.0, V: 2.5, IV: 2.0, vi: 1.5}  # Tonic  # Dominant  # Subdominant  # Relative minor
 
         # Calculate weighted chord strength
         total_strength = 0.0

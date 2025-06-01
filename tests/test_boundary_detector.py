@@ -1,7 +1,6 @@
 """Tests for boundary detector module."""
 
 import unittest
-from unittest.mock import MagicMock, patch
 
 import numpy as np
 
@@ -42,9 +41,7 @@ class TestBoundaryDetector(unittest.TestCase):
         self.assertEqual(features['mfcc'].shape[0], 13)  # 13 MFCC coefficients
         self.assertEqual(features['chroma'].shape[0], 12)  # 12 chroma bins
         self.assertEqual(features['rms'].shape[0], 1)  # 1 RMS value per frame
-        self.assertEqual(
-            features['spectral_centroid'].shape[0], 1
-        )  # 1 centroid per frame
+        self.assertEqual(features['spectral_centroid'].shape[0], 1)  # 1 centroid per frame
 
     def test_compute_self_similarity_matrix(self):
         """Test self-similarity matrix computation."""
@@ -58,23 +55,17 @@ class TestBoundaryDetector(unittest.TestCase):
 
         # Check that diagonal is 1 (self-similarity)
         diagonal = np.diag(similarity_matrix)
-        np.testing.assert_array_almost_equal(
-            diagonal, np.ones_like(diagonal), decimal=5
-        )
+        np.testing.assert_array_almost_equal(diagonal, np.ones_like(diagonal), decimal=5)
 
         # Check symmetry
-        np.testing.assert_array_almost_equal(
-            similarity_matrix, similarity_matrix.T, decimal=5
-        )
+        np.testing.assert_array_almost_equal(similarity_matrix, similarity_matrix.T, decimal=5)
 
     def test_detect_boundaries(self):
         """Test boundary detection."""
         features = self.detector.extract_structural_features(self.y, self.sr)
         similarity_matrix = self.detector.compute_self_similarity_matrix(features)
 
-        boundaries = self.detector.detect_boundaries(
-            similarity_matrix, sr=self.sr, min_segment_length=2.0, bpm=120.0
-        )
+        boundaries = self.detector.detect_boundaries(similarity_matrix, sr=self.sr, min_segment_length=2.0, bpm=120.0)
 
         # Check that boundaries are returned
         self.assertIsInstance(boundaries, list)
@@ -83,12 +74,7 @@ class TestBoundaryDetector(unittest.TestCase):
 
         # Check that boundaries are in ascending order
         if len(boundaries) > 1:
-            self.assertTrue(
-                all(
-                    boundaries[i] < boundaries[i + 1]
-                    for i in range(len(boundaries) - 1)
-                )
-            )
+            self.assertTrue(all(boundaries[i] < boundaries[i + 1] for i in range(len(boundaries) - 1)))
 
     def test_compute_novelty(self):
         """Test novelty computation."""
@@ -122,10 +108,7 @@ class TestBoundaryDetector(unittest.TestCase):
         # Check that boundaries are in ascending order
         if len(snapped_boundaries) > 1:
             self.assertTrue(
-                all(
-                    snapped_boundaries[i] < snapped_boundaries[i + 1]
-                    for i in range(len(snapped_boundaries) - 1)
-                )
+                all(snapped_boundaries[i] < snapped_boundaries[i + 1] for i in range(len(snapped_boundaries) - 1))
             )
 
     def test_detect_repetitions(self):
@@ -140,12 +123,7 @@ class TestBoundaryDetector(unittest.TestCase):
         # Check repetition structure
         for rep in repetitions:
             self.assertIsInstance(rep, dict)
-            required_keys = [
-                'first_occurrence',
-                'second_occurrence',
-                'duration',
-                'similarity',
-            ]
+            required_keys = ['first_occurrence', 'second_occurrence', 'duration', 'similarity']
             for key in required_keys:
                 self.assertIn(key, rep)
 
@@ -161,24 +139,9 @@ class TestBoundaryDetector(unittest.TestCase):
         """Test overlapping repetition removal."""
         # Create test repetitions with overlaps
         repetitions = [
-            {
-                'first_occurrence': 0,
-                'second_occurrence': 20,
-                'duration': 10,
-                'similarity': 0.8,
-            },
-            {
-                'first_occurrence': 5,
-                'second_occurrence': 25,
-                'duration': 10,
-                'similarity': 0.7,
-            },
-            {
-                'first_occurrence': 40,
-                'second_occurrence': 60,
-                'duration': 10,
-                'similarity': 0.9,
-            },
+            {'first_occurrence': 0, 'second_occurrence': 20, 'duration': 10, 'similarity': 0.8},
+            {'first_occurrence': 5, 'second_occurrence': 25, 'duration': 10, 'similarity': 0.7},
+            {'first_occurrence': 40, 'second_occurrence': 60, 'duration': 10, 'similarity': 0.9},
         ]
 
         filtered = self.detector._remove_overlapping_repetitions(repetitions)
@@ -254,9 +217,7 @@ class TestBoundaryDetector(unittest.TestCase):
         # Test beat-synchronized novelty with different BPM values
         bpm_values = [120, 130, 140]
         for bpm in bpm_values:
-            novelty = self.detector._compute_beat_synchronized_novelty(
-                similarity_matrix, self.sr, bpm
-            )
+            novelty = self.detector._compute_beat_synchronized_novelty(similarity_matrix, self.sr, bpm)
 
             self.assertIsInstance(novelty, np.ndarray)
             self.assertEqual(len(novelty), similarity_matrix.shape[0])
@@ -334,10 +295,7 @@ class TestBoundaryDetector(unittest.TestCase):
         features = self.detector.extract_structural_features(realistic_audio, self.sr)
         similarity_matrix = self.detector.compute_self_similarity_matrix(features)
         boundaries = self.detector.detect_boundaries(
-            similarity_matrix,
-            sr=self.sr,
-            min_segment_length=8.0,  # 8 seconds minimum
-            bpm=120.0,
+            similarity_matrix, sr=self.sr, min_segment_length=8.0, bpm=120.0  # 8 seconds minimum
         )
 
         # Should detect multiple boundaries for a 4-minute track
@@ -350,12 +308,7 @@ class TestBoundaryDetector(unittest.TestCase):
         self.assertGreater(boundary_times[-1], 230)  # Should end near track end
 
         # Boundaries should be in ascending order
-        self.assertTrue(
-            all(
-                boundary_times[i] < boundary_times[i + 1]
-                for i in range(len(boundary_times) - 1)
-            )
-        )
+        self.assertTrue(all(boundary_times[i] < boundary_times[i + 1] for i in range(len(boundary_times) - 1)))
 
     def test_boundary_detection_consistency(self):
         """Test that boundary detection produces consistent results."""
@@ -363,15 +316,9 @@ class TestBoundaryDetector(unittest.TestCase):
         similarity_matrix = self.detector.compute_self_similarity_matrix(features)
 
         # Run boundary detection multiple times
-        boundaries1 = self.detector.detect_boundaries(
-            similarity_matrix, self.sr, bpm=120.0
-        )
-        boundaries2 = self.detector.detect_boundaries(
-            similarity_matrix, self.sr, bpm=120.0
-        )
-        boundaries3 = self.detector.detect_boundaries(
-            similarity_matrix, self.sr, bpm=120.0
-        )
+        boundaries1 = self.detector.detect_boundaries(similarity_matrix, self.sr, bpm=120.0)
+        boundaries2 = self.detector.detect_boundaries(similarity_matrix, self.sr, bpm=120.0)
+        boundaries3 = self.detector.detect_boundaries(similarity_matrix, self.sr, bpm=120.0)
 
         # Results should be identical (deterministic algorithm)
         self.assertEqual(boundaries1, boundaries2)

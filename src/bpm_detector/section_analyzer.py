@@ -1,6 +1,6 @@
 """Section analysis and detection module."""
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import librosa
 import numpy as np
@@ -97,16 +97,12 @@ class SectionAnalyzer:
                     'spectral_rolloff': np.array([4000.0]),
                     'mfcc': np.random.randn(13, 1),
                 }
-                refined_type = self.classify_instrumental_subtype(
-                    section, spectral_features
-                )
+                refined_type = self.classify_instrumental_subtype(section, spectral_features)
 
             # Create refined section
             refined_section = section.copy()
             refined_section['type'] = refined_type
-            refined_section['ascii_label'] = self.JP_ASCII_LABELS.get(
-                refined_type, refined_type
-            )
+            refined_section['ascii_label'] = self.JP_ASCII_LABELS.get(refined_type, refined_type)
             refined_section['spectral_flux'] = float(avg_flux)
 
             refined_sections.append(refined_section)
@@ -114,7 +110,7 @@ class SectionAnalyzer:
         return refined_sections
 
     def classify_instrumental_subtype(
-        self, section: Dict[str, Any], spectral_features: Dict[str, Any] = None
+        self, section: Dict[str, Any], spectral_features: Optional[Dict[str, Any]] = None
     ) -> str:
         """Classify instrumental sections into more specific subtypes.
 
@@ -139,9 +135,7 @@ class SectionAnalyzer:
         complexity = characteristics.get('spectral_complexity', 0.5)
         rhythmic_density = characteristics.get('rhythmic_density', 0.5)
 
-        duration = section.get(
-            'duration', section.get('end_time', 0) - section.get('start_time', 0)
-        )
+        duration = section.get('duration', section.get('end_time', 0) - section.get('start_time', 0))
 
         # Classify based on position, energy, complexity, and duration
 
@@ -165,9 +159,7 @@ class SectionAnalyzer:
         else:
             return 'solo'
 
-    def enhance_outro_detection(
-        self, sections: List[Dict[str, Any]], y: np.ndarray, sr: int
-    ) -> List[Dict[str, Any]]:
+    def enhance_outro_detection(self, sections: List[Dict[str, Any]], y: np.ndarray, sr: int) -> List[Dict[str, Any]]:
         """Enhanced outro detection with fade analysis and harmonic resolution.
 
         Args:
@@ -193,27 +185,17 @@ class SectionAnalyzer:
                 is_fade_ending = self.detect_fade_ending(section, y, sr)
 
                 # Check for harmonic resolution (tonic return)
-                has_harmonic_resolution = self.detect_harmonic_resolution(
-                    section, y, sr
-                )
+                has_harmonic_resolution = self.detect_harmonic_resolution(section, y, sr)
 
                 # Reclassify as outro if conditions are met
-                if is_fade_ending or (
-                    has_harmonic_resolution and section['energy_level'] < 0.5
-                ):
+                if is_fade_ending or (has_harmonic_resolution and section['energy_level'] < 0.5):
                     enhanced_sections[i]['type'] = 'outro'
-                    enhanced_sections[i]['ascii_label'] = self.JP_ASCII_LABELS.get(
-                        'outro', 'outro'
-                    )
-                    enhanced_sections[i]['outro_confidence'] = (
-                        0.8 if is_fade_ending else 0.6
-                    )
+                    enhanced_sections[i]['ascii_label'] = self.JP_ASCII_LABELS.get('outro', 'outro')
+                    enhanced_sections[i]['outro_confidence'] = 0.8 if is_fade_ending else 0.6
 
         return enhanced_sections
 
-    def detect_fade_ending(
-        self, section: Dict[str, Any], y: np.ndarray, sr: int
-    ) -> bool:
+    def detect_fade_ending(self, section: Dict[str, Any], y: np.ndarray, sr: int) -> bool:
         """Detect fade/silence ending pattern.
 
         Args:
@@ -274,9 +256,7 @@ class SectionAnalyzer:
         # Low voiced ratio indicates instrumental/fade ending
         return voiced_ratio < 0.15
 
-    def detect_harmonic_resolution(
-        self, section: Dict[str, Any], y: np.ndarray, sr: int
-    ) -> bool:
+    def detect_harmonic_resolution(self, section: Dict[str, Any], y: np.ndarray, sr: int) -> bool:
         """Detect harmonic resolution to tonic (key return).
 
         Args:
@@ -313,15 +293,10 @@ class SectionAnalyzer:
         tonic_strength = avg_final_chroma[tonic_candidate]
 
         # Check if tonic is significantly stronger than other notes
-        other_strengths = np.concatenate(
-            [
-                avg_final_chroma[:tonic_candidate],
-                avg_final_chroma[tonic_candidate + 1 :],
-            ]
-        )
+        other_strengths = np.concatenate([avg_final_chroma[:tonic_candidate], avg_final_chroma[tonic_candidate + 1 :]])
 
         if len(other_strengths) > 0:
-            max_other = np.max(other_strengths)
+            max_other: float = float(np.max(other_strengths))
             tonic_dominance = tonic_strength / (max_other + 1e-8)
 
             # Strong tonic presence indicates resolution
@@ -329,9 +304,7 @@ class SectionAnalyzer:
 
         return False
 
-    def detect_chorus_hooks(
-        self, sections: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    def detect_chorus_hooks(self, sections: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Detect and enforce chorus sections based on hook patterns.
 
         Args:
@@ -349,15 +322,11 @@ class SectionAnalyzer:
             # Hook pattern detection: high energy + brightness + 6-10 bar duration
             energy_level = section.get('energy_level', 0.0)
             brightness = section.get('brightness', 0.0)  # May not be available
-            duration = section.get(
-                'duration', section['end_time'] - section['start_time']
-            )
+            duration = section.get('duration', section['end_time'] - section['start_time'])
 
             # Strong hook pattern criteria
             is_hook = (
-                energy_level > 0.65
-                and 6 <= duration <= 10
-                and section['type'] in ['verse', 'bridge', 'pre_chorus']
+                energy_level > 0.65 and 6 <= duration <= 10 and section['type'] in ['verse', 'bridge', 'pre_chorus']
             )  # Convert these to chorus
 
             # Additional brightness check if available
@@ -366,9 +335,7 @@ class SectionAnalyzer:
 
             if is_hook:
                 processed[i]['type'] = 'chorus'
-                processed[i]['ascii_label'] = self.JP_ASCII_LABELS.get(
-                    'chorus', 'chorus'
-                )
+                processed[i]['ascii_label'] = self.JP_ASCII_LABELS.get('chorus', 'chorus')
 
         return processed
 
@@ -399,9 +366,7 @@ class SectionAnalyzer:
         # Calculate repetition ratio
         unique_sections = len(set(section_types))
         total_sections = len(section_types)
-        repetition_ratio = (
-            1.0 - (unique_sections / total_sections) if total_sections > 0 else 0.0
-        )
+        repetition_ratio = 1.0 - (unique_sections / total_sections) if total_sections > 0 else 0.0
 
         # Calculate structural complexity
         structural_complexity = self._calculate_structural_complexity(sections)
@@ -470,9 +435,7 @@ class SectionAnalyzer:
         # 1. Number of different section types
         section_types = [s['type'] for s in sections]
         unique_types = len(set(section_types))
-        type_complexity = min(
-            1.0, unique_types / 6.0
-        )  # Normalize by max expected types
+        type_complexity = min(1.0, unique_types / 6.0)  # Normalize by max expected types
 
         # 2. Variation in section durations
         durations = []
@@ -483,7 +446,7 @@ class SectionAnalyzer:
                 durations.append(s['end_time'] - s['start_time'])
             else:
                 durations.append(10.0)  # Default duration if neither available
-        duration_std = np.std(durations) / (np.mean(durations) + 1e-8)
+        duration_std = float(np.std(durations)) / (float(np.mean(durations)) + 1e-8)
         duration_complexity = min(1.0, duration_std)
 
         # 3. Non-standard form patterns
@@ -494,9 +457,7 @@ class SectionAnalyzer:
             form_complexity += 0.3
 
         # Combine factors
-        overall_complexity = (
-            type_complexity + duration_complexity + form_complexity
-        ) / 3.0
+        overall_complexity = (float(type_complexity) + float(duration_complexity) + form_complexity) / 3.0
 
         return min(1.0, overall_complexity)
 
@@ -511,9 +472,7 @@ class SectionAnalyzer:
         """
         lines = []
         lines.append(f"Section List (Estimated {len(sections)} sections)")
-        tmpl = (
-            "  {idx:>2}. {typ:<8}({ascii}) {start:>6.1f}s - {end:>6.1f}s ({dur:>5.1f}s)"
-        )
+        tmpl = "  {idx:>2}. {typ:<8}({ascii}) {start:>6.1f}s - {end:>6.1f}s ({dur:>5.1f}s)"
         for i, s in enumerate(sections, 1):
             duration = s.get('duration', s['end_time'] - s['start_time'])
             lines.append(
@@ -562,9 +521,4 @@ class SectionAnalyzer:
                 'energy_range': float(p90 - p10),
             }
         else:
-            return {
-                'min_energy': 0.0,
-                'max_energy': 0.05,
-                'mean_energy': 0.025,
-                'energy_range': 0.05,
-            }
+            return {'min_energy': 0.0, 'max_energy': 0.05, 'mean_energy': 0.025, 'energy_range': 0.05}

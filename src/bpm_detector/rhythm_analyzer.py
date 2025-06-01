@@ -1,6 +1,6 @@
 """Rhythm and time signature analysis module."""
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, Tuple
 
 import librosa
 import numpy as np
@@ -44,35 +44,26 @@ class RhythmAnalyzer:
         features = {}
 
         # Onset strength
-        features['onset_strength'] = librosa.onset.onset_strength(
-            y=y, sr=sr, hop_length=self.hop_length
-        )
+        features['onset_strength'] = librosa.onset.onset_strength(y=y, sr=sr, hop_length=self.hop_length)
 
         # Onset times
-        onsets = librosa.onset.onset_detect(
-            y=y, sr=sr, hop_length=self.hop_length, units='time'
-        )
+        onsets = librosa.onset.onset_detect(y=y, sr=sr, hop_length=self.hop_length, units='time')
         features['onset_times'] = onsets
 
         # Onset frames
-        onset_frames = librosa.onset.onset_detect(
-            y=y, sr=sr, hop_length=self.hop_length, units='frames'
-        )
+        onset_frames = librosa.onset.onset_detect(y=y, sr=sr, hop_length=self.hop_length, units='frames')
         features['onset_frames'] = onset_frames
 
         # Tempo and beats
-        tempo, beats = librosa.beat.beat_track(y=y, sr=sr, hop_length=self.hop_length)
-        features['tempo'] = tempo
+        tempo_raw, beats = librosa.beat.beat_track(y=y, sr=sr, hop_length=self.hop_length)
+        tempo_value = float(tempo_raw) if np.isscalar(tempo_raw) else 120.0
+        features['tempo'] = np.array([tempo_value])
         features['beat_frames'] = beats
-        features['beat_times'] = librosa.frames_to_time(
-            beats, sr=sr, hop_length=self.hop_length
-        )
+        features['beat_times'] = librosa.frames_to_time(beats, sr=sr, hop_length=self.hop_length)
 
         return features
 
-    def detect_time_signature(
-        self, onset_features: Dict[str, np.ndarray], sr: int
-    ) -> Tuple[str, float]:
+    def detect_time_signature(self, onset_features: Dict[str, np.ndarray], sr: int) -> Tuple[str, float]:
         """Detect time signature from onset features.
 
         Args:
@@ -99,9 +90,7 @@ class RhythmAnalyzer:
         best_score = 0.6  # Give 4/4 a head start
 
         # Score 4/4 first with bias
-        four_four_score = self._score_time_signature(
-            beat_intervals, self.TIME_SIGNATURES['4/4'], onset_features
-        )
+        four_four_score = self._score_time_signature(beat_intervals, self.TIME_SIGNATURES['4/4'], onset_features)
         four_four_score += 0.3  # Add bias for 4/4
 
         if four_four_score > best_score:
@@ -129,10 +118,7 @@ class RhythmAnalyzer:
         return best_signature, min(1.0, best_score)
 
     def _score_time_signature(
-        self,
-        beat_intervals: np.ndarray,
-        signature_info: Dict[str, Any],
-        onset_features: Dict[str, np.ndarray],
+        self, beat_intervals: np.ndarray, signature_info: Dict[str, Any], onset_features: Dict[str, np.ndarray]
     ) -> float:
         """Score how well beat intervals fit a time signature.
 
@@ -177,20 +163,15 @@ class RhythmAnalyzer:
         consistency_score = np.exp(-pattern_variance * 10)  # Exponential decay
 
         # Check for strong beat emphasis
-        strong_beat_score = self._analyze_strong_beats(
-            onset_features, signature_info, beat_intervals
-        )
+        strong_beat_score = self._analyze_strong_beats(onset_features, signature_info, beat_intervals)
 
         # Combine scores
         total_score = (consistency_score + strong_beat_score) / 2.0
 
-        return min(1.0, total_score)
+        return float(min(1.0, total_score))
 
     def _analyze_strong_beats(
-        self,
-        onset_features: Dict[str, np.ndarray],
-        signature_info: Dict[str, Any],
-        beat_intervals: np.ndarray,
+        self, onset_features: Dict[str, np.ndarray], signature_info: Dict[str, Any], beat_intervals: np.ndarray
     ) -> float:
         """Analyze emphasis on strong beats.
 
@@ -254,11 +235,9 @@ class RhythmAnalyzer:
         # Convert to 0-1 score (ratio > 1 is good)
         score = min(1.0, (emphasis_ratio - 1.0) / 2.0 + 0.5)
 
-        return max(0.0, score)
+        return float(max(0.0, score))
 
-    def extract_rhythm_patterns(
-        self, onset_features: Dict[str, np.ndarray], time_signature: str
-    ) -> Dict[str, Any]:
+    def extract_rhythm_patterns(self, onset_features: Dict[str, np.ndarray], time_signature: str) -> Dict[str, Any]:
         """Extract rhythm patterns from onset features.
 
         Args:
@@ -283,17 +262,13 @@ class RhythmAnalyzer:
         complexity = self._calculate_rhythmic_complexity(onset_times, beat_times)
 
         # Calculate syncopation level
-        syncopation = self._calculate_syncopation(
-            onset_times, beat_times, time_signature
-        )
+        syncopation = self._calculate_syncopation(onset_times, beat_times, time_signature)
 
         # Calculate pattern regularity
         regularity = self._calculate_pattern_regularity(onset_times, beat_times)
 
         # Calculate subdivision density
-        subdivision_density = self._calculate_subdivision_density(
-            onset_times, beat_times
-        )
+        subdivision_density = self._calculate_subdivision_density(onset_times, beat_times)
 
         return {
             'rhythmic_complexity': complexity,
@@ -302,9 +277,7 @@ class RhythmAnalyzer:
             'subdivision_density': subdivision_density,
         }
 
-    def _calculate_rhythmic_complexity(
-        self, onset_times: np.ndarray, beat_times: np.ndarray
-    ) -> float:
+    def _calculate_rhythmic_complexity(self, onset_times: np.ndarray, beat_times: np.ndarray) -> float:
         """Calculate rhythmic complexity score.
 
         Args:
@@ -365,9 +338,7 @@ class RhythmAnalyzer:
 
         return complexity
 
-    def _calculate_syncopation(
-        self, onset_times: np.ndarray, beat_times: np.ndarray, time_signature: str
-    ) -> float:
+    def _calculate_syncopation(self, onset_times: np.ndarray, beat_times: np.ndarray, time_signature: str) -> float:
         """Calculate syncopation level.
 
         Args:
@@ -381,9 +352,7 @@ class RhythmAnalyzer:
         if len(onset_times) == 0 or len(beat_times) == 0:
             return 0.0
 
-        signature_info = self.TIME_SIGNATURES.get(
-            time_signature, self.TIME_SIGNATURES['4/4']
-        )
+        signature_info = self.TIME_SIGNATURES.get(time_signature, self.TIME_SIGNATURES['4/4'])
         beats_per_measure = signature_info['beats_per_measure']
         strong_beats = signature_info['strong_beats']
 
@@ -395,7 +364,7 @@ class RhythmAnalyzer:
         for onset in onset_times:
             # Find closest beat
             beat_distances = np.abs(beat_times - onset)
-            closest_beat_idx = np.argmin(beat_distances)
+            closest_beat_idx: int = int(np.argmin(beat_distances))
             closest_distance = beat_distances[closest_beat_idx]
 
             # Determine if onset is on beat, off beat, or syncopated
@@ -403,9 +372,9 @@ class RhythmAnalyzer:
 
             if closest_distance < beat_tolerance:
                 # On beat - check if strong or weak
-                beat_in_measure = closest_beat_idx % beats_per_measure
+                beat_in_measure = closest_beat_idx % beats_per_measure  # type: ignore[operator]
 
-                if beat_in_measure in strong_beats:
+                if beat_in_measure in strong_beats:  # type: ignore[operator]
                     strong_beat_onsets += 1
                 else:
                     weak_beat_onsets += 1
@@ -424,9 +393,7 @@ class RhythmAnalyzer:
 
         return min(1.0, syncopation_ratio)
 
-    def _calculate_pattern_regularity(
-        self, onset_times: np.ndarray, beat_times: np.ndarray
-    ) -> float:
+    def _calculate_pattern_regularity(self, onset_times: np.ndarray, beat_times: np.ndarray) -> float:
         """Calculate pattern regularity.
 
         Args:
@@ -457,11 +424,9 @@ class RhythmAnalyzer:
         # Convert to regularity score (lower CV = higher regularity)
         regularity = np.exp(-cv * 2)  # Exponential decay
 
-        return min(1.0, regularity)
+        return float(min(1.0, regularity))
 
-    def _calculate_subdivision_density(
-        self, onset_times: np.ndarray, beat_times: np.ndarray
-    ) -> float:
+    def _calculate_subdivision_density(self, onset_times: np.ndarray, beat_times: np.ndarray) -> float:
         """Calculate subdivision density.
 
         Args:
@@ -519,9 +484,7 @@ class RhythmAnalyzer:
         else:
             return 'straight', min(1.0, (0.55 - swing_ratio) / 0.05)
 
-    def _calculate_swing_ratio(
-        self, onset_times: np.ndarray, beat_times: np.ndarray
-    ) -> float:
+    def _calculate_swing_ratio(self, onset_times: np.ndarray, beat_times: np.ndarray) -> float:
         """Calculate swing ratio.
 
         Args:
@@ -543,9 +506,7 @@ class RhythmAnalyzer:
             beat_duration = beat_end - beat_start
 
             # Find onsets within this beat
-            beat_onsets = onset_times[
-                (onset_times >= beat_start) & (onset_times < beat_end)
-            ]
+            beat_onsets = onset_times[(onset_times >= beat_start) & (onset_times < beat_end)]
 
             for onset in beat_onsets:
                 # Calculate position within beat (0-1)
@@ -609,14 +570,11 @@ class RhythmAnalyzer:
         rhythm_patterns = self.extract_rhythm_patterns(onset_features, time_signature)
 
         # Detect groove type
-        groove_type, groove_confidence = self.detect_groove_type(
-            onset_features, rhythm_patterns
-        )
+        groove_type, groove_confidence = self.detect_groove_type(onset_features, rhythm_patterns)
 
         # Calculate swing ratio
         swing_ratio = self._calculate_swing_ratio(
-            onset_features.get('onset_times', np.array([])),
-            onset_features.get('beat_times', np.array([])),
+            onset_features.get('onset_times', np.array([])), onset_features.get('beat_times', np.array([]))
         )
 
         # Detect polyrhythm (simplified)
@@ -633,8 +591,8 @@ class RhythmAnalyzer:
             'subdivision_density': rhythm_patterns['subdivision_density'],
             'swing_ratio': swing_ratio,
             'polyrhythm_detected': polyrhythm_detected,
-            'onset_count': len(onset_features.get('onset_times', [])),
-            'beat_count': len(onset_features.get('beat_times', [])),
+            'onset_count': len(onset_features.get('onset_times', np.array([]))),
+            'beat_count': len(onset_features.get('beat_times', np.array([]))),
         }
 
     def _detect_polyrhythm(self, onset_features: Dict[str, np.ndarray]) -> bool:

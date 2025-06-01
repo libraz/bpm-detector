@@ -1,6 +1,6 @@
 """Key validation and specialized detection for key detection."""
 
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import numpy as np
 
@@ -17,8 +17,8 @@ class KeyValidator:
         mode: str,
         confidence: float,
         chroma_mean: np.ndarray,
-        correlations: List[float] = None,
-        key_names: List[str] = None,
+        correlations: Optional[List[float]] = None,
+        key_names: Optional[List[str]] = None,
     ) -> Tuple[str, str, float]:
         """Validate and potentially correct key detection using relative major/minor analysis.
 
@@ -66,16 +66,10 @@ class KeyValidator:
         correlation_diff = relative_correlation - current_correlation
 
         # Relaxed threshold for relative major/minor switching
-        if (
-            abs(correlation_diff) < _Constants.REL_SWITCH_THRESH
-        ):  # Close correlations, need deeper analysis
+        if abs(correlation_diff) < _Constants.REL_SWITCH_THRESH:  # Close correlations, need deeper analysis
             # Analyze chord progression tendencies
-            major_tendency = KeyValidator._analyze_major_tendency(
-                chroma_mean, key_index
-            )
-            minor_tendency = KeyValidator._analyze_minor_tendency(
-                chroma_mean, key_index
-            )
+            major_tendency = KeyValidator._analyze_major_tendency(chroma_mean, key_index)
+            minor_tendency = KeyValidator._analyze_minor_tendency(chroma_mean, key_index)
 
             if mode == 'Major' and minor_tendency > major_tendency + 0.2:
                 # Switch to relative minor
@@ -105,7 +99,7 @@ class KeyValidator:
             + chroma_mean[fifth]
         ) / 3.2
 
-        return major_strength
+        return float(major_strength)
 
     @staticmethod
     def _analyze_minor_tendency(chroma_mean: np.ndarray, key_index: int) -> float:
@@ -120,7 +114,7 @@ class KeyValidator:
             + chroma_mean[fifth]
         ) / 3.2
 
-        return minor_strength
+        return float(minor_strength)
 
 
 class JPOPKeyDetector:
@@ -131,7 +125,7 @@ class JPOPKeyDetector:
         chroma_mean: np.ndarray,
         correlations: List[float],
         enable_jpop: bool = True,
-        key_names: List[str] = None,
+        key_names: Optional[List[str]] = None,
     ) -> Tuple[str, str, float]:
         """Special detection for common J-Pop keys like G# minor."""
 
@@ -166,9 +160,7 @@ class JPOPKeyDetector:
                         c_sharp = chroma_mean[1]  # C#
 
                         # Check for G#m - F# - E - C#m pattern
-                        pattern_strength = (
-                            tonic * 1.5 + f_sharp * 1.2 + e * 1.1 + c_sharp * 1.0
-                        ) / 4.8
+                        pattern_strength = (tonic * 1.5 + f_sharp * 1.2 + e * 1.1 + c_sharp * 1.0) / 4.8
 
                         # Boost if this pattern is strong (lowered threshold)
                         if pattern_strength > _Constants.PATTERN_THRESH:

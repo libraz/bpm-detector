@@ -47,20 +47,7 @@ class TestKeyHintMapper(unittest.TestCase):
         self.assertIsInstance(hint_mapping, dict)
 
         # Should contain expected key mappings
-        expected_keys = [
-            'C',
-            'G',
-            'D',
-            'A',
-            'E',
-            'B',
-            'F#',
-            'Db',
-            'Ab',
-            'Eb',
-            'Bb',
-            'F',
-        ]
+        expected_keys = ['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'Db', 'Ab', 'Eb', 'Bb', 'F']
         for key in expected_keys:
             self.assertIn(key, hint_mapping)
 
@@ -75,10 +62,8 @@ class TestKeyHintMapper(unittest.TestCase):
         hint_map = KeyHintMapper.build_hint_mapping()
 
         # Test with matching hint
-        adjusted_key, adjusted_mode, adjusted_conf = (
-            KeyHintMapper.apply_external_key_hint(
-                'C Major', 'C', 'Major', 0.8, hint_map
-            )
+        adjusted_key, adjusted_mode, adjusted_conf = KeyHintMapper.apply_external_key_hint(
+            'C Major', 'C', 'Major', 0.8, hint_map
         )
 
         # Should boost confidence for matching hint
@@ -87,10 +72,8 @@ class TestKeyHintMapper(unittest.TestCase):
         self.assertGreaterEqual(adjusted_conf, 0.8)
 
         # Test with conflicting hint
-        conflicting_key, conflicting_mode, conflicting_conf = (
-            KeyHintMapper.apply_external_key_hint(
-                'G Major', 'C', 'Major', 0.8, hint_map
-            )
+        conflicting_key, conflicting_mode, conflicting_conf = KeyHintMapper.apply_external_key_hint(
+            'G Major', 'C', 'Major', 0.8, hint_map
         )
 
         # Should handle conflicting hint appropriately

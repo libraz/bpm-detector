@@ -37,9 +37,7 @@ class TimbreFeatureExtractor:
         magnitude = np.abs(stft)
 
         # MFCC features
-        features['mfcc'] = librosa.feature.mfcc(
-            y=y, sr=sr, n_mfcc=13, hop_length=self.hop_length
-        )
+        features['mfcc'] = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13, hop_length=self.hop_length)
 
         # Spectral features (using pre-computed STFT)
         features['spectral_centroid'] = librosa.feature.spectral_centroid(
@@ -50,39 +48,27 @@ class TimbreFeatureExtractor:
             S=magnitude, sr=sr, hop_length=self.hop_length
         )
 
-        features['spectral_rolloff'] = librosa.feature.spectral_rolloff(
-            S=magnitude, sr=sr, hop_length=self.hop_length
-        )
+        features['spectral_rolloff'] = librosa.feature.spectral_rolloff(S=magnitude, sr=sr, hop_length=self.hop_length)
 
         features['spectral_contrast'] = librosa.feature.spectral_contrast(
             S=magnitude, sr=sr, hop_length=self.hop_length
         )
 
-        features['spectral_flatness'] = librosa.feature.spectral_flatness(
-            S=magnitude, hop_length=self.hop_length
-        )
+        features['spectral_flatness'] = librosa.feature.spectral_flatness(S=magnitude, hop_length=self.hop_length)
 
         # Zero crossing rate
-        features['zero_crossing_rate'] = librosa.feature.zero_crossing_rate(
-            y, hop_length=self.hop_length
-        )[0]
+        features['zero_crossing_rate'] = librosa.feature.zero_crossing_rate(y, hop_length=self.hop_length)[0]
 
         # RMS energy
-        features['rms'] = librosa.feature.rms(
-            y=y, hop_length=self.hop_length, frame_length=self.frame_length
-        )
+        features['rms'] = librosa.feature.rms(y=y, hop_length=self.hop_length, frame_length=self.frame_length)
 
         # Chroma and tonnetz
-        chroma = librosa.feature.chroma_stft(
-            S=magnitude, sr=sr, hop_length=self.hop_length
-        )
+        chroma = librosa.feature.chroma_stft(S=magnitude, sr=sr, hop_length=self.hop_length)
         features['chroma'] = chroma
         features['tonnetz'] = librosa.feature.tonnetz(chroma=chroma, sr=sr)
 
         # Mel-frequency spectrogram
-        features['melspectrogram'] = librosa.feature.melspectrogram(
-            S=magnitude**2, sr=sr, hop_length=self.hop_length
-        )
+        features['melspectrogram'] = librosa.feature.melspectrogram(S=magnitude**2, sr=sr, hop_length=self.hop_length)
 
         return features
 
@@ -115,7 +101,7 @@ class TimbreFeatureExtractor:
         if normalized_centroid > 0.1:
             brightness = max(0.4, brightness)  # Minimum 0.4 for content with highs
 
-        return max(0.0, min(1.0, brightness))
+        return float(max(0.0, min(1.0, brightness)))
 
     def analyze_roughness(self, spectral_contrast: np.ndarray) -> float:
         """Analyze spectral roughness.
@@ -136,29 +122,20 @@ class TimbreFeatureExtractor:
         contrast_std = np.std(spectral_contrast)
 
         # Calculate range (max - min) for roughness indication
-        contrast_range = np.max(spectral_contrast) - np.min(spectral_contrast)
+        contrast_range = float(np.max(spectral_contrast)) - float(np.min(spectral_contrast))
 
         # Calculate higher-order moments for better discrimination
         contrast_skewness = np.abs(
-            np.mean(
-                (
-                    (spectral_contrast - np.mean(spectral_contrast))
-                    / (contrast_std + 1e-8)
-                )
-                ** 3
-            )
+            np.mean(((spectral_contrast - np.mean(spectral_contrast)) / (contrast_std + 1e-8)) ** 3)
         )
-        contrast_kurtosis = np.mean(
-            ((spectral_contrast - np.mean(spectral_contrast)) / (contrast_std + 1e-8))
-            ** 4
-        )
+        contrast_kurtosis = np.mean(((spectral_contrast - np.mean(spectral_contrast)) / (contrast_std + 1e-8)) ** 4)
 
         # Calculate coefficient of variation for relative roughness
         contrast_mean = np.mean(spectral_contrast)
         if contrast_mean > 0:
-            cv = contrast_std / contrast_mean
+            cv = float(contrast_std / contrast_mean)
         else:
-            cv = 0
+            cv = 0.0
 
         # Combine multiple measures for better discrimination
         variance_score = min(0.6, contrast_variance / 2.0)
@@ -185,7 +162,7 @@ class TimbreFeatureExtractor:
         # Ensure we don't hit the ceiling too easily
         roughness = min(0.85, roughness)
 
-        return roughness
+        return float(roughness)
 
     def analyze_warmth(self, mfcc: np.ndarray) -> float:
         """Analyze timbral warmth.
@@ -221,7 +198,7 @@ class TimbreFeatureExtractor:
         if warmth < 0.3:
             warmth = 0.3 + (warmth * 0.4)  # Boost low warmth values
 
-        return warmth
+        return float(warmth)
 
     def analyze_density(self, features: Dict[str, np.ndarray]) -> float:
         """Analyze acoustic density/texture.
@@ -245,9 +222,9 @@ class TimbreFeatureExtractor:
         rms_score = np.mean(rms)
 
         # Combine scores
-        density = (flatness_score + min(1.0, rms_score * 5)) / 2.0
+        density = (float(flatness_score) + min(1.0, float(rms_score) * 5)) / 2.0
 
-        return min(1.0, density)
+        return float(min(1.0, density))
 
     def analyze_texture(self, features: Dict[str, np.ndarray]) -> Dict[str, float]:
         """Analyze overall acoustic texture.
@@ -263,60 +240,56 @@ class TimbreFeatureExtractor:
         # Smoothness (based on spectral flatness)
         spectral_flatness = features.get('spectral_flatness', np.array([]))
         if len(spectral_flatness) > 0:
-            texture['smoothness'] = 1.0 - np.mean(spectral_flatness)
+            texture['smoothness'] = float(1.0 - np.mean(spectral_flatness))
         else:
             texture['smoothness'] = 0.0
 
         # Richness (based on spectral bandwidth)
         spectral_bandwidth = features.get('spectral_bandwidth', np.array([]))
         if len(spectral_bandwidth) > 0:
-            texture['richness'] = min(1.0, np.mean(spectral_bandwidth) / 5000.0)
+            texture['richness'] = float(min(1.0, np.mean(spectral_bandwidth) / 5000.0))
         else:
             texture['richness'] = 0.0
 
         # Clarity (based on spectral contrast)
         spectral_contrast = features.get('spectral_contrast', np.array([]))
         if spectral_contrast.size > 0:
-            texture['clarity'] = min(1.0, np.mean(spectral_contrast) / 30.0)
+            texture['clarity'] = float(min(1.0, np.mean(spectral_contrast) / 30.0))
         else:
             texture['clarity'] = 0.0
 
         # Fullness (based on RMS energy distribution)
         rms = features.get('rms', np.array([]))
         if len(rms) > 0:
-            texture['fullness'] = min(1.0, np.mean(rms) * 10.0)
+            texture['fullness'] = float(min(1.0, np.mean(rms) * 10.0))
         else:
             texture['fullness'] = 0.0
 
         # Spectral complexity (expected by tests)
         mfcc = features.get('mfcc', np.array([]))
         if mfcc.size > 0:
-            texture['spectral_complexity'] = min(1.0, np.std(mfcc) / 10.0)
+            texture['spectral_complexity'] = float(min(1.0, np.std(mfcc) / 10.0))
         else:
             texture['spectral_complexity'] = 0.0
 
         # Harmonic richness (expected by tests)
         chroma = features.get('chroma', np.array([]))
         if chroma.size > 0:
-            texture['harmonic_richness'] = min(1.0, np.std(chroma) / 2.0)
+            texture['harmonic_richness'] = float(min(1.0, np.std(chroma) / 2.0))
         else:
             texture['harmonic_richness'] = 0.0
 
         # Temporal stability (expected by tests)
         rms = features.get('rms', np.array([]))
         if len(rms) > 1:
-            texture['temporal_stability'] = 1.0 - min(
-                1.0, np.std(rms) / np.mean(rms + 1e-8)
-            )
+            texture['temporal_stability'] = float(1.0 - min(1.0, float(np.std(rms)) / float(np.mean(rms + 1e-8))))
         else:
             texture['temporal_stability'] = 1.0
 
         # Timbral consistency (expected by tests)
         mfcc = features.get('mfcc', np.array([]))
         if mfcc.size > 0:
-            texture['timbral_consistency'] = 1.0 - min(
-                1.0, np.mean(np.std(mfcc, axis=1)) / 10.0
-            )
+            texture['timbral_consistency'] = float(1.0 - min(1.0, np.mean(np.std(mfcc, axis=1)) / 10.0))
         else:
             texture['timbral_consistency'] = 1.0
 

@@ -1,0 +1,49 @@
+{
+  "python.defaultInterpreterPath": "./.venv/bin/python",
+  "python.linting.enabled": true,
+  "python.linting.flake8Enabled": true,
+  "python.linting.flake8Args": [
+    "--max-line-length=120",
+    "--extend-ignore=E203,W503"
+  ],
+  "python.linting.mypyEnabled": true,
+  "python.linting.mypyArgs": ["--config-file=pyproject.toml"],
+  "python.formatting.provider": "black",
+  "python.formatting.blackArgs": [
+    "--skip-string-normalization",
+    "--skip-magic-trailing-comma"
+  ],
+  "python.sortImports.args": ["--profile=black"],
+  "editor.formatOnSave": true,
+  "editor.formatOnPaste": true,
+  "editor.formatOnType": true,
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "explicit",
+    "source.fixAll": "explicit",
+    "source.fixAll.flake8": "explicit"
+  },
+  "python.linting.lintOnSave": true,
+  "python.linting.pylintEnabled": false,
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.fixAll": [
+    "source.unusedImports",
+    "source.convertImportFormat"
+  ],
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter",
+    "editor.formatOnSave": true,
+    "editor.formatOnPaste": true,
+    "editor.formatOnType": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit",
+      "source.fixAll": "explicit",
+      "source.fixAll.flake8": "explicit",
+      "source.unusedImports": "explicit"
+    },
+    "editor.rulers": [120],
+    "editor.wordWrap": "off"
+  },
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "files.trimFinalNewlines": true
+}

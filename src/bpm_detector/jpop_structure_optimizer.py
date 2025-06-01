@@ -1,6 +1,6 @@
 """J-Pop specific structure optimization module."""
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
@@ -21,15 +21,13 @@ class JPopStructureOptimizer:
         "solo": "Solo",
         "spoken": "Serifu",
         "outro": "Outro",
+        "drop_chorus": "OchiSabi",
     }
 
     def __init__(self):
         """Initialize J-Pop structure optimizer."""
-        pass
 
-    def suppress_consecutive_pre_chorus(
-        self, sections: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    def suppress_consecutive_pre_chorus(self, sections: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Suppress consecutive pre-chorus sections to prevent over-segmentation.
 
         Args:
@@ -60,14 +58,10 @@ class JPopStructureOptimizer:
                 for j in range(start_idx, start_idx + consecutive_count):
                     if j == start_idx:  # First → Verse
                         processed[j]['type'] = 'verse'
-                        processed[j]['ascii_label'] = self.JP_ASCII_LABELS.get(
-                            'verse', 'verse'
-                        )
+                        processed[j]['ascii_label'] = self.JP_ASCII_LABELS.get('verse', 'verse')
                     elif j == start_idx + consecutive_count - 1:  # Last → Chorus
                         processed[j]['type'] = 'chorus'
-                        processed[j]['ascii_label'] = self.JP_ASCII_LABELS.get(
-                            'chorus', 'chorus'
-                        )
+                        processed[j]['ascii_label'] = self.JP_ASCII_LABELS.get('chorus', 'chorus')
                     # Middle ones stay as pre_chorus
 
             # Handle 2 consecutive pre-chorus (Enhanced: Always downgrade 2nd to Verse for J-Pop structure)
@@ -83,9 +77,7 @@ class JPopStructureOptimizer:
 
         return processed
 
-    def enforce_pre_chorus_chorus_pairing(
-        self, sections: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    def enforce_pre_chorus_chorus_pairing(self, sections: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Enforce Pre-Chorus → Chorus pairing rules for J-Pop structure.
 
         Args:
@@ -119,16 +111,12 @@ class JPopStructureOptimizer:
                         next_section = processed[i + 1]
                         if next_section['type'] in ['verse', 'pre_chorus', 'bridge']:
                             processed[i + 1]['type'] = 'chorus'
-                            processed[i + 1]['ascii_label'] = self.JP_ASCII_LABELS.get(
-                                'chorus', 'chorus'
-                            )
+                            processed[i + 1]['ascii_label'] = self.JP_ASCII_LABELS.get('chorus', 'chorus')
                             continue
 
                 # Check if followed by chorus within 3 sections
                 has_following_chorus = False
-                for j in range(
-                    i + 1, min(i + 4, len(processed))
-                ):  # Check next 3 sections
+                for j in range(i + 1, min(i + 4, len(processed))):  # Check next 3 sections
                     if processed[j]['type'] in ['chorus', 'bridge']:
                         has_following_chorus = True
                         break
@@ -136,9 +124,7 @@ class JPopStructureOptimizer:
                 # If no following chorus/bridge, downgrade to verse
                 if not has_following_chorus:
                     processed[i]['type'] = 'verse'
-                    processed[i]['ascii_label'] = self.JP_ASCII_LABELS.get(
-                        'verse', 'verse'
-                    )
+                    processed[i]['ascii_label'] = self.JP_ASCII_LABELS.get('verse', 'verse')
 
         # Second pass: Ensure chorus sections have preceding pre-chorus
         for i in range(1, len(processed)):
@@ -155,20 +141,13 @@ class JPopStructureOptimizer:
                         continue
 
                     # Only upgrade verse to pre-chorus if energy is building
-                    if (
-                        prev_section['type'] == 'verse'
-                        and prev_section.get('energy_level', 0.5) > 0.4
-                    ):
+                    if prev_section['type'] == 'verse' and prev_section.get('energy_level', 0.5) > 0.4:
                         processed[i - 1]['type'] = 'pre_chorus'
-                        processed[i - 1]['ascii_label'] = self.JP_ASCII_LABELS.get(
-                            'pre_chorus', 'pre_chorus'
-                        )
+                        processed[i - 1]['ascii_label'] = self.JP_ASCII_LABELS.get('pre_chorus', 'pre_chorus')
 
         return processed
 
-    def collapse_alternating_ar_patterns(
-        self, sections: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    def collapse_alternating_ar_patterns(self, sections: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Collapse A-R alternating patterns to A-R-B structure.
 
         Args:
@@ -216,9 +195,7 @@ class JPopStructureOptimizer:
 
         # Add vocal presence information to all sections
         for section in processed:
-            vocal_ratio = self._detect_vocal_presence(
-                y, sr, section['start_time'], section['end_time']
-            )
+            vocal_ratio = self._detect_vocal_presence(y, sr, section['start_time'], section['end_time'])
             section['vocal_ratio'] = vocal_ratio
 
         # Find and break consecutive chorus chains
@@ -241,15 +218,12 @@ class JPopStructureOptimizer:
         return processed
 
     def label_special_chorus_sections(
-        self,
-        sections: List[Dict[str, Any]],
-        y: np.ndarray,
-        sr: int,
-        modulations: List[Dict[str, Any]] | None = None,
+        self, sections: List[Dict[str, Any]], y: np.ndarray, sr: int, modulations: Optional[List[Dict[str, Any]]] = None
     ) -> List[Dict[str, Any]]:
-        """Label drop chorus and last chorus modulation."""
+        """Label drop chorus and last chorus modulation with improved detection."""
         processed = sections.copy()
 
+        # Calculate RMS energies for all sections
         energies = []
         for s in processed:
             start = int(s.get("start_time", 0) * sr)
@@ -261,27 +235,140 @@ class JPopStructureOptimizer:
                 rms = np.sqrt(np.mean(seg**2) + 1e-12)
                 energies.append(20 * np.log10(rms))
 
-        for idx, s in enumerate(processed):
-            if s.get("type") == "chorus" and energies[idx] <= -30.0:
-                if modulations and any(
-                    m.get("time", 0) >= s.get("start_time", 0)
-                    and m.get("time", 0) < s.get("end_time", 0)
-                    for m in modulations
-                ):
-                    s["type"] = "drop_chorus"
-                    s["ascii_label"] = "落ちサビ"
+        # Calculate average RMS for the entire track
+        # overall_rms = np.sqrt(np.mean(y**2) + 1e-12)  # For future use
+        # overall_rms_db = 20 * np.log10(overall_rms)  # For future use
 
+        # Enhanced drop chorus detection with improved logic and ΔKey feature
+        for idx, s in enumerate(processed):
+            if s.get("type") == "chorus":
+                # Feature 1: RMS analysis with z-score normalization
+                rms_z_score = self._calculate_rms_z_score(energies[idx], energies)
+                is_low_rms = rms_z_score < -1.0  # Below 1 standard deviation
+
+                # Feature 2: Key change detection (ΔKey >= 3 semitones)
+                key_shift_semitones = 0
+                has_significant_key_change = False
+                if modulations:
+                    for m in modulations:
+                        mod_time = m.get("time", 0)
+                        if s.get("start_time", 0) <= mod_time < s.get("end_time", 0):
+                            # Calculate semitone difference between keys
+                            key_shift_semitones = self._calculate_key_shift_semitones(
+                                m.get("from_key", ""), m.get("to_key", "")
+                            )
+                            if abs(key_shift_semitones) >= 3:  # Significant key change
+                                has_significant_key_change = True
+                            break
+
+                # Feature 3: Chord progression change (ΔChord)
+                has_chord_change = self._detect_chord_progression_change(s, processed, idx)
+
+                # Drop chorus detection rule (as per report):
+                # if (RMS_z < -1.0) and (|ΔKey| >= 3 semitones):
+                #     label = "Drop"
+                should_be_drop = is_low_rms and has_significant_key_change
+
+                # Alternative condition: extremely low energy regardless of key change
+                if energies[idx] <= -50.0:
+                    should_be_drop = True
+
+                if should_be_drop:
+                    s["type"] = "drop_chorus"
+                    s["ascii_label"] = self.JP_ASCII_LABELS.get("drop_chorus", "drop_chorus")
+                    # Add debug information
+                    s["_debug_info"] = {
+                        "rms_z_score": rms_z_score,
+                        "key_shift_semitones": key_shift_semitones,
+                        "has_chord_change": has_chord_change,
+                        "energy_db": energies[idx],
+                    }
+
+        # Label last chorus with modulation key
         if modulations:
             last_mod = modulations[-1]
-            if processed and processed[-1].get("type") == "chorus":
+            if processed and processed[-1].get("type") in ["chorus", "drop_chorus"]:
                 if last_mod.get("time", 0) >= processed[-1].get("start_time", 0):
                     processed[-1]["last_chorus_key"] = last_mod.get("to_key")
 
         return processed
 
-    def _process_chorus_chain(
-        self, sections: List[Dict[str, Any]], chorus_indices: List[int], bpm: float
-    ) -> None:
+    def _calculate_rms_z_score(self, current_rms: float, all_rms: List[float]) -> float:
+        """Calculate Z-score for RMS energy normalization."""
+        if len(all_rms) < 2:
+            return 0.0
+
+        mean_rms = np.mean(all_rms)
+        std_rms = np.std(all_rms)
+
+        if std_rms == 0:
+            return 0.0
+
+        result = (current_rms - mean_rms) / std_rms
+        return float(result)
+
+    def _calculate_key_shift_semitones(self, from_key: str, to_key: str) -> int:
+        """Calculate semitone distance between two keys."""
+        if not from_key or not to_key:
+            return 0
+
+        # Extract note names (remove mode)
+        from_note = from_key.split()[0] if ' ' in from_key else from_key
+        to_note = to_key.split()[0] if ' ' in to_key else to_key
+
+        # Note to semitone mapping
+        note_to_semitone = {
+            'C': 0,
+            'C#': 1,
+            'Db': 1,
+            'D': 2,
+            'D#': 3,
+            'Eb': 3,
+            'E': 4,
+            'F': 5,
+            'F#': 6,
+            'Gb': 6,
+            'G': 7,
+            'G#': 8,
+            'Ab': 8,
+            'A': 9,
+            'A#': 10,
+            'Bb': 10,
+            'B': 11,
+        }
+
+        from_semitone = note_to_semitone.get(from_note, 0)
+        to_semitone = note_to_semitone.get(to_note, 0)
+
+        # Calculate shortest distance (considering octave wrap)
+        diff = to_semitone - from_semitone
+        if diff > 6:
+            diff -= 12
+        elif diff < -6:
+            diff += 12
+
+        return int(diff)
+
+    def _detect_chord_progression_change(
+        self, current_section: Dict[str, Any], processed_sections: List[Dict[str, Any]], current_idx: int
+    ) -> bool:
+        """Detect significant chord progression changes."""
+        if current_idx == 0 or not processed_sections:
+            return False
+
+        current_chords = current_section.get('chord_progression', '')
+
+        # Compare with previous section
+        prev_section = processed_sections[-1]
+        prev_chords = prev_section.get('chord_progression', '')
+
+        # Simple chord change detection
+        if current_chords != prev_chords and current_chords and prev_chords:
+            return True
+
+        return False
+
+    def _process_chorus_chain(self, sections: List[Dict[str, Any]], chorus_indices: List[int], bpm: float) -> None:
         """Process a chain of consecutive chorus sections.
 
         Args:
@@ -306,17 +393,13 @@ class JPopStructureOptimizer:
             vocal_ratio = section.get('vocal_ratio', 0.5)
             energy_level = section.get('energy_level', 0.5)
 
-            should_convert = (
-                vocal_ratio < 0.25 or energy_level < 0.4
-            ) and eight_bar_duration * 0.5 <= section[
+            should_convert = (vocal_ratio < 0.25 or energy_level < 0.4) and eight_bar_duration * 0.5 <= section[
                 'duration'
             ] <= eight_bar_duration * 2
 
             if should_convert:
                 sections[second_idx]['type'] = 'instrumental'
-                sections[second_idx]['ascii_label'] = self.JP_ASCII_LABELS[
-                    'instrumental'
-                ]
+                sections[second_idx]['ascii_label'] = self.JP_ASCII_LABELS['instrumental']
 
         elif len(chorus_indices) == 3:
             # B,B,B → convert middle to D (always for 3-chain)
@@ -324,15 +407,9 @@ class JPopStructureOptimizer:
             section = sections[middle_idx]
 
             # Convert middle to instrumental if duration is reasonable
-            if (
-                eight_bar_duration * 0.25
-                <= section['duration']
-                <= eight_bar_duration * 3
-            ):
+            if eight_bar_duration * 0.25 <= section['duration'] <= eight_bar_duration * 3:
                 sections[middle_idx]['type'] = 'instrumental'
-                sections[middle_idx]['ascii_label'] = self.JP_ASCII_LABELS[
-                    'instrumental'
-                ]
+                sections[middle_idx]['ascii_label'] = self.JP_ASCII_LABELS['instrumental']
 
         elif len(chorus_indices) >= 4:
             # B,B,B,B+ → convert middle sections to D, keep max 2 consecutive B
@@ -342,17 +419,11 @@ class JPopStructureOptimizer:
                 section = sections[idx]
 
                 # Convert to instrumental if duration is reasonable
-                if (
-                    eight_bar_duration * 0.25
-                    <= section['duration']
-                    <= eight_bar_duration * 3
-                ):
+                if eight_bar_duration * 0.25 <= section['duration'] <= eight_bar_duration * 3:
                     sections[idx]['type'] = 'instrumental'
                     sections[idx]['ascii_label'] = self.JP_ASCII_LABELS['instrumental']
 
-    def _detect_vocal_presence(
-        self, y: np.ndarray, sr: int, start_time: float, end_time: float
-    ) -> float:
+    def _detect_vocal_presence(self, y: np.ndarray, sr: int, start_time: float, end_time: float) -> float:
         """Detect vocal presence ratio in a given time segment.
 
         Args:

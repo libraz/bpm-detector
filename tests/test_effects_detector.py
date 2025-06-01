@@ -88,9 +88,7 @@ class TestEffectsDetector(unittest.TestCase):
         """Test compression detection."""
         # Create more dynamic audio with varying amplitude
         t = np.linspace(0, 2, int(self.sr * 2))
-        dynamic_audio = np.sin(2 * np.pi * 440 * t) * (
-            0.1 + 0.9 * np.sin(2 * np.pi * 0.5 * t)
-        )
+        dynamic_audio = np.sin(2 * np.pi * 440 * t) * (0.1 + 0.9 * np.sin(2 * np.pi * 0.5 * t))
         dynamic_compression = self.detector._detect_compression(dynamic_audio)
 
         # Create heavily compressed audio (very uniform amplitude)
@@ -121,9 +119,7 @@ class TestEffectsDetector(unittest.TestCase):
 
     def test_short_audio_handling(self):
         """Test handling of very short audio."""
-        short_audio = 0.5 * np.sin(
-            2 * np.pi * 440 * np.linspace(0, 0.1, int(self.sr * 0.1))
-        )
+        short_audio = 0.5 * np.sin(2 * np.pi * 440 * np.linspace(0, 0.1, int(self.sr * 0.1)))
 
         effects = self.detector.analyze_effects_usage(short_audio, self.sr)
 

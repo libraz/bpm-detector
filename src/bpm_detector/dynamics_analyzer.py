@@ -34,9 +34,7 @@ class DynamicsAnalyzer:
         features = {}
 
         # RMS energy
-        features['rms'] = librosa.feature.rms(
-            y=y, hop_length=self.hop_length, frame_length=self.frame_size
-        )[0]
+        features['rms'] = librosa.feature.rms(y=y, hop_length=self.hop_length, frame_length=self.frame_size)[0]
 
         # Spectral energy
         stft = librosa.stft(y, hop_length=self.hop_length, n_fft=self.frame_size)
@@ -47,42 +45,28 @@ class DynamicsAnalyzer:
 
         # Low frequency energy (20-250 Hz)
         low_freq_mask = (freqs >= 20) & (freqs <= 250)
-        features['low_freq_energy'] = np.sum(
-            np.abs(stft[low_freq_mask, :]) ** 2, axis=0
-        )
+        features['low_freq_energy'] = np.sum(np.abs(stft[low_freq_mask, :]) ** 2, axis=0)
 
         # Mid frequency energy (250-4000 Hz)
         mid_freq_mask = (freqs >= 250) & (freqs <= 4000)
-        features['mid_freq_energy'] = np.sum(
-            np.abs(stft[mid_freq_mask, :]) ** 2, axis=0
-        )
+        features['mid_freq_energy'] = np.sum(np.abs(stft[mid_freq_mask, :]) ** 2, axis=0)
 
         # High frequency energy (4000+ Hz)
         high_freq_mask = freqs >= 4000
-        features['high_freq_energy'] = np.sum(
-            np.abs(stft[high_freq_mask, :]) ** 2, axis=0
-        )
+        features['high_freq_energy'] = np.sum(np.abs(stft[high_freq_mask, :]) ** 2, axis=0)
 
         # Onset strength
-        features['onset_strength'] = librosa.onset.onset_strength(
-            y=y, sr=sr, hop_length=self.hop_length
-        )
+        features['onset_strength'] = librosa.onset.onset_strength(y=y, sr=sr, hop_length=self.hop_length)
 
         # Zero crossing rate (related to energy distribution)
-        features['zcr'] = librosa.feature.zero_crossing_rate(
-            y, hop_length=self.hop_length
-        )[0]
+        features['zcr'] = librosa.feature.zero_crossing_rate(y, hop_length=self.hop_length)[0]
         features['zero_crossing_rate'] = features['zcr']  # Field name expected by tests
 
         # Spectral centroid (expected by tests)
-        features['spectral_centroid'] = librosa.feature.spectral_centroid(
-            y=y, sr=sr, hop_length=self.hop_length
-        )[0]
+        features['spectral_centroid'] = librosa.feature.spectral_centroid(y=y, sr=sr, hop_length=self.hop_length)[0]
 
         # Spectral rolloff (expected by tests)
-        features['spectral_rolloff'] = librosa.feature.spectral_rolloff(
-            y=y, sr=sr, hop_length=self.hop_length
-        )[0]
+        features['spectral_rolloff'] = librosa.feature.spectral_rolloff(y=y, sr=sr, hop_length=self.hop_length)[0]
 
         return features
 
@@ -96,21 +80,18 @@ class DynamicsAnalyzer:
             Dictionary of dynamic range measures
         """
         if len(rms) == 0:
-            return {
-                'dynamic_range_db': 0.0,
-                'peak_to_average_ratio': 0.0,
-                'crest_factor': 0.0,
-                'dynamic_variance': 0.0,
-            }
+            return {'dynamic_range_db': 0.0, 'peak_to_average_ratio': 0.0, 'crest_factor': 0.0, 'dynamic_variance': 0.0}
 
         # Convert to dB
         rms_db = librosa.amplitude_to_db(rms + 1e-8)
 
         # Dynamic range (difference between max and min)
-        dynamic_range_db = np.max(rms_db) - np.min(rms_db)
+        max_db = float(np.max(rms_db))
+        min_db = float(np.min(rms_db))
+        dynamic_range_db = max_db - min_db
 
         # Peak to average ratio
-        peak_level = np.max(rms)
+        peak_level = float(np.max(rms))
         average_level = np.mean(rms)
         peak_to_average_ratio = peak_level / (average_level + 1e-8)
 
@@ -124,9 +105,7 @@ class DynamicsAnalyzer:
         return {
             'dynamic_range_db': float(dynamic_range_db),
             'peak_to_average_ratio': float(peak_to_average_ratio),
-            'peak_to_average': float(
-                peak_to_average_ratio
-            ),  # Field name expected by tests
+            'peak_to_average': float(peak_to_average_ratio),  # Field name expected by tests
             'crest_factor': float(crest_factor),
             'dynamic_variance': float(dynamic_variance),
             'rms_std': float(np.std(rms)),  # Field name expected by tests
@@ -165,10 +144,11 @@ class DynamicsAnalyzer:
         average_loudness = np.mean(rms_db_positive)
 
         # Peak loudness
-        peak_loudness = np.max(rms_db_positive)
+        peak_loudness = float(np.max(rms_db_positive))
 
         # Loudness range (similar to dynamic range but for loudness)
-        loudness_range = np.max(rms_db_positive) - np.min(rms_db_positive)
+        min_loudness = float(np.min(rms_db_positive))
+        loudness_range = peak_loudness - min_loudness
 
         # Perceived loudness (A-weighted approximation)
         perceived_loudness = self._calculate_perceived_loudness(y, sr)
@@ -216,25 +196,23 @@ class DynamicsAnalyzer:
         weighted_power = power_spectrum * a_weights[: len(power_spectrum)]
 
         # Calculate perceived loudness
-        perceived_loudness = np.sum(weighted_power)
+        perceived_loudness = float(np.sum(weighted_power))
 
         # Scale based on signal amplitude for test compatibility
-        signal_amplitude = np.max(np.abs(y))
+        signal_amplitude = float(np.max(np.abs(y)))
 
         # For test compatibility: louder signals should have proportionally higher perceived loudness
         if signal_amplitude > 0:
-            perceived_loudness *= (
-                signal_amplitude**2
-            )  # Square for more sensitivity to amplitude changes
+            perceived_loudness *= signal_amplitude**2  # Square for more sensitivity to amplitude changes
 
         # Normalize to reasonable scale
-        total_power = np.sum(power_spectrum)
+        total_power = float(np.sum(power_spectrum))
         if total_power > 0:
             perceived_loudness = min(1.0, perceived_loudness / total_power * 5.0)
         else:
             perceived_loudness = 0.0
 
-        return max(0.01, perceived_loudness)  # Ensure minimum positive value
+        return float(max(0.01, perceived_loudness))  # Ensure minimum positive value
 
     def generate_energy_profile(
         self, energy_features: Dict[str, np.ndarray], window_size: float = 1.0
@@ -333,9 +311,7 @@ class DynamicsAnalyzer:
         peak_threshold = np.mean(smoothed_rms) + np.std(smoothed_rms)
         sr = 22050  # Default sample rate
         energy_peaks, _ = find_peaks(
-            smoothed_rms,
-            height=peak_threshold,
-            distance=int(5 * sr / self.hop_length),  # Minimum 5 seconds apart
+            smoothed_rms, height=peak_threshold, distance=int(5 * sr / self.hop_length)  # Minimum 5 seconds apart
         )
 
         climax_times = []
@@ -352,9 +328,7 @@ class DynamicsAnalyzer:
             if len(onset_strength) > peak_idx:
                 onset_intensity = onset_strength[peak_idx]
                 # Combine energy and onset strength
-                combined_intensity = (
-                    intensity + onset_intensity / np.max(onset_strength + 1e-8)
-                ) / 2.0
+                combined_intensity = (intensity + onset_intensity / np.max(onset_strength + 1e-8)) / 2.0
             else:
                 combined_intensity = intensity
 
@@ -378,9 +352,7 @@ class DynamicsAnalyzer:
             'climax_count': len(climax_times),
         }
 
-    def analyze_tension_curve(
-        self, energy_features: Dict[str, np.ndarray], window_size: float = 1.0
-    ) -> Dict[str, Any]:
+    def analyze_tension_curve(self, energy_features: Dict[str, np.ndarray], window_size: float = 1.0) -> Dict[str, Any]:
         """Analyze musical tension over time.
 
         Args:
@@ -421,16 +393,12 @@ class DynamicsAnalyzer:
         min_length = min(len(rms_norm), len(spectral_norm), len(high_freq_norm))
 
         tension_curve = (
-            rms_norm[:min_length] * 0.4
-            + spectral_norm[:min_length] * 0.3
-            + high_freq_norm[:min_length] * 0.3
+            rms_norm[:min_length] * 0.4 + spectral_norm[:min_length] * 0.3 + high_freq_norm[:min_length] * 0.3
         )
 
         # Smooth the tension curve
         if len(tension_curve) > 10:
-            tension_curve = savgol_filter(
-                tension_curve, min(11, len(tension_curve) // 2 * 2 + 1), 3
-            )
+            tension_curve = savgol_filter(tension_curve, min(11, len(tension_curve) // 2 * 2 + 1), 3)
 
         # Ensure values are in 0-1 range
         tension_curve = np.clip(tension_curve, 0, 1)
@@ -455,9 +423,7 @@ class DynamicsAnalyzer:
             'tension_variance': tension_variance,
         }
 
-    def analyze_energy_distribution(
-        self, energy_features: Dict[str, np.ndarray]
-    ) -> Dict[str, float]:
+    def analyze_energy_distribution(self, energy_features: Dict[str, np.ndarray]) -> Dict[str, float]:
         """Analyze energy distribution across frequency bands.
 
         Args:
@@ -508,9 +474,7 @@ class DynamicsAnalyzer:
             'high_energy_ratio': float(high_freq_ratio),  # Field name expected by tests
             'spectral_balance': float(spectral_balance),
             'energy_entropy': float(normalized_entropy),
-            'energy_concentration': float(
-                1.0 - normalized_entropy
-            ),  # Field name expected by tests
+            'energy_concentration': float(1.0 - normalized_entropy),  # Field name expected by tests
             'energy_spread': float(normalized_entropy),  # Field name expected by tests
         }
 
@@ -529,12 +493,7 @@ class DynamicsAnalyzer:
         rms = energy_features.get('rms', np.array([]))
 
         if len(rms) < 20:  # Need sufficient data
-            return {
-                'sudden_increases': [],
-                'sudden_decreases': [],
-                'sustained_peaks': [],
-                'quiet_sections': [],
-            }
+            return {'sudden_increases': [], 'sudden_decreases': [], 'sustained_peaks': [], 'quiet_sections': []}
 
         # Smooth the signal
         smoothed_rms = savgol_filter(rms, min(11, len(rms) // 2 * 2 + 1), 3)
@@ -556,9 +515,7 @@ class DynamicsAnalyzer:
             time_seconds = idx * self.hop_length / sr
             magnitude = rms_diff[idx] / (np.std(rms_diff) + 1e-8)
 
-            sudden_increases.append(
-                {'time': float(time_seconds), 'magnitude': float(magnitude)}
-            )
+            sudden_increases.append({'time': float(time_seconds), 'magnitude': float(magnitude)})
 
         # Detect sudden decreases (drops)
         drop_threshold = -np.std(rms_diff) * 2
@@ -568,9 +525,7 @@ class DynamicsAnalyzer:
             time_seconds = idx * self.hop_length / sr
             magnitude = abs(rms_diff[idx]) / (np.std(rms_diff) + 1e-8)
 
-            sudden_decreases.append(
-                {'time': float(time_seconds), 'magnitude': float(magnitude)}
-            )
+            sudden_decreases.append({'time': float(time_seconds), 'magnitude': float(magnitude)})
 
         # Detect sustained peaks
         peak_threshold = np.mean(smoothed_rms) + np.std(smoothed_rms)
@@ -596,9 +551,7 @@ class DynamicsAnalyzer:
                 start_time = group[0] * self.hop_length / sr
                 avg_magnitude = np.mean(smoothed_rms[group])
 
-                sustained_peaks.append(
-                    {'time': float(start_time), 'magnitude': float(avg_magnitude)}
-                )
+                sustained_peaks.append({'time': float(start_time), 'magnitude': float(avg_magnitude)})
 
         # Detect quiet sections
         quiet_threshold = np.mean(smoothed_rms) - np.std(smoothed_rms)
@@ -624,9 +577,7 @@ class DynamicsAnalyzer:
                 start_time = group[0] * self.hop_length / sr
                 avg_magnitude = np.mean(smoothed_rms[group])
 
-                quiet_sections.append(
-                    {'time': float(start_time), 'magnitude': float(avg_magnitude)}
-                )
+                quiet_sections.append({'time': float(start_time), 'magnitude': float(avg_magnitude)})
 
         return {
             'sudden_increases': sudden_increases,
@@ -695,26 +646,12 @@ class DynamicsAnalyzer:
             'dynamic_range': dynamic_range,
             'loudness': loudness,
             'energy_profile': (
-                energy_profile['energy_curve'].tolist()
-                if len(energy_profile['energy_curve']) > 0
-                else []
+                energy_profile['energy_curve'].tolist() if len(energy_profile['energy_curve']) > 0 else []
             ),
             'climax_points': climax_points_list,
-            'tension_curve': (
-                tension_data['tension_curve'].tolist()
-                if len(tension_data['tension_curve']) > 0
-                else []
-            ),
+            'tension_curve': (tension_data['tension_curve'].tolist() if len(tension_data['tension_curve']) > 0 else []),
             'energy_distribution': energy_distribution,
             'dynamic_events': dynamic_events_list,
-            'overall_energy': (
-                float(np.mean(energy_features['rms']))
-                if len(energy_features['rms']) > 0
-                else 0.0
-            ),
-            'energy_variance': (
-                float(np.var(energy_features['rms']))
-                if len(energy_features['rms']) > 0
-                else 0.0
-            ),
+            'overall_energy': (float(np.mean(energy_features['rms'])) if len(energy_features['rms']) > 0 else 0.0),
+            'energy_variance': (float(np.var(energy_features['rms'])) if len(energy_features['rms']) > 0 else 0.0),
         }

@@ -49,13 +49,7 @@ class MelodyHarmonyAnalyzer:
         self.key_detector = KeyDetector(hop_length)
 
     def analyze(
-        self,
-        y: np.ndarray,
-        sr: int,
-        *,
-        key_hint: Optional[str] = None,
-        progress_callback=None,
-        **kwargs,
+        self, y: np.ndarray, sr: int, *, key_hint: Optional[str] = None, progress_callback=None, **kwargs
     ) -> Dict[str, Any]:
         """Perform complete melody and harmony analysis.
 
@@ -83,22 +77,16 @@ class MelodyHarmonyAnalyzer:
         melody = self.melody_analyzer.extract_melody(y, sr)
 
         if progress_callback:
-            progress_callback(
-                PROGRESS_MELODIC_ANALYSIS, "Analyzing melodic characteristics..."
-            )
+            progress_callback(PROGRESS_MELODIC_ANALYSIS, "Analyzing melodic characteristics...")
 
         # Analyze melodic characteristics
         melodic_range = self.melody_analyzer.analyze_melodic_range(melody)
         melodic_direction = self.melody_analyzer.analyze_melodic_direction(melody)
-        interval_distribution = self.melody_analyzer.analyze_interval_distribution(
-            melody
-        )
+        interval_distribution = self.melody_analyzer.analyze_interval_distribution(melody)
         pitch_stability = self.melody_analyzer.analyze_pitch_stability(melody)
 
         if progress_callback:
-            progress_callback(
-                PROGRESS_HARMONIC_ANALYSIS, "Analyzing harmonic characteristics..."
-            )
+            progress_callback(PROGRESS_HARMONIC_ANALYSIS, "Analyzing harmonic characteristics...")
 
         # Analyze harmonic characteristics
         harmony_complexity = self.harmony_analyzer.analyze_harmony_complexity(y, sr)
@@ -116,29 +104,19 @@ class MelodyHarmonyAnalyzer:
             'intervals': interval_distribution,
             'stability': pitch_stability,
             'melody_present': bool(np.any(melody['voiced_flag'])),
-            'melody_coverage': (
-                float(np.mean(melody['voiced_flag']))
-                if len(melody['voiced_flag']) > 0
-                else 0.0
-            ),
+            'melody_coverage': (float(np.mean(melody['voiced_flag'])) if len(melody['voiced_flag']) > 0 else 0.0),
         }
 
-        harmony_section = {
-            'complexity': harmony_complexity,
-            'consonance': consonance,
-            'rhythm': harmonic_rhythm,
-        }
+        harmony_section = {'complexity': harmony_complexity, 'consonance': consonance, 'rhythm': harmonic_rhythm}
 
         # Calculate combined features
         combined_features = {
-            'melody_harmony_balance': self._calculate_melody_harmony_balance(
-                melody_section, harmony_section
-            ),
-            'overall_complexity': self._calculate_overall_complexity(
-                melody_section, harmony_section
-            ),
+            'melody_harmony_balance': self._calculate_melody_harmony_balance(melody_section, harmony_section),
+            'overall_complexity': self._calculate_overall_complexity(melody_section, harmony_section),
             'musical_sophistication': self._calculate_musical_sophistication(
-                melody_section, harmony_section, key_detection
+                melody_section,
+                harmony_section,
+                key_detection.__dict__ if hasattr(key_detection, '__dict__') else key_detection,
             ),
         }
 
@@ -156,11 +134,7 @@ class MelodyHarmonyAnalyzer:
             'consonance': consonance,
             'harmonic_rhythm': harmonic_rhythm,
             'melody_present': bool(np.any(melody['voiced_flag'])),
-            'melody_coverage': (
-                float(np.mean(melody['voiced_flag']))
-                if len(melody['voiced_flag']) > 0
-                else 0.0
-            ),
+            'melody_coverage': (float(np.mean(melody['voiced_flag'])) if len(melody['voiced_flag']) > 0 else 0.0),
         }
 
         # Optional: return raw melody information
@@ -174,11 +148,13 @@ class MelodyHarmonyAnalyzer:
         """Extract melody line from audio."""
         return self.melody_analyzer.extract_melody(y, sr)
 
-    def detect_key(
-        self, y: np.ndarray, sr: int, *, external_key_hint: Optional[str] = None
-    ) -> Dict[str, Any]:
+    def detect_key(self, y: np.ndarray, sr: int, *, external_key_hint: Optional[str] = None) -> Dict[str, Any]:
         """Detect musical key."""
-        return self.key_detector.detect_key(y, sr, external_key_hint=external_key_hint)
+        result = self.key_detector.detect_key(y, sr, external_key_hint=external_key_hint)
+        # Convert KeyDetectionResult to dict if needed
+        if hasattr(result, '__dict__'):
+            return result.__dict__
+        return dict(result) if isinstance(result, dict) else {}
 
     def analyze_harmony_complexity(self, y: np.ndarray, sr: int) -> Dict[str, float]:
         """Analyze harmonic complexity."""
@@ -197,67 +173,42 @@ class MelodyHarmonyAnalyzer:
     ) -> float:
         """Calculate balance between melody and harmony complexity."""
         try:
-            melody_complexity = melody_section.get('direction', {}).get(
-                'contour_complexity', 0.0
-            )
-            harmony_complexity = harmony_section.get('complexity', {}).get(
-                'harmonic_complexity', 0.0
-            )
+            melody_complexity = melody_section.get('direction', {}).get('contour_complexity', 0.0)
+            harmony_complexity = harmony_section.get('complexity', {}).get('harmonic_complexity', 0.0)
 
             # Balance score: closer to 0.5 means better balance
             if melody_complexity + harmony_complexity == 0:
                 return 0.5
 
-            balance = min(melody_complexity, harmony_complexity) / max(
-                melody_complexity, harmony_complexity
-            )
+            balance = min(melody_complexity, harmony_complexity) / max(melody_complexity, harmony_complexity)
             return float(balance)
         except (KeyError, ZeroDivisionError, TypeError):
             return 0.5
 
-    def _calculate_overall_complexity(
-        self, melody_section: Dict[str, Any], harmony_section: Dict[str, Any]
-    ) -> float:
+    def _calculate_overall_complexity(self, melody_section: Dict[str, Any], harmony_section: Dict[str, Any]) -> float:
         """Calculate overall musical complexity."""
         try:
-            melody_complexity = melody_section.get('direction', {}).get(
-                'contour_complexity', 0.0
-            )
-            harmony_complexity = harmony_section.get('complexity', {}).get(
-                'harmonic_complexity', 0.0
-            )
+            melody_complexity = melody_section.get('direction', {}).get('contour_complexity', 0.0)
+            harmony_complexity = harmony_section.get('complexity', {}).get('harmonic_complexity', 0.0)
             interval_complexity = (
                 len(
                     [
                         k
                         for k, v in melody_section.get('intervals', {}).items()
-                        if v > 0
-                        and k
-                        not in [
-                            'small_intervals',
-                            'medium_intervals',
-                            'large_intervals',
-                        ]
+                        if v > 0 and k not in ['small_intervals', 'medium_intervals', 'large_intervals']
                     ]
                 )
                 / 12.0
             )
 
             # Weighted combination
-            overall = (
-                melody_complexity * 0.4
-                + harmony_complexity * 0.4
-                + interval_complexity * 0.2
-            )
+            overall = melody_complexity * 0.4 + harmony_complexity * 0.4 + interval_complexity * 0.2
             return float(min(1.0, overall))
         except (KeyError, TypeError):
             return 0.0
 
     def _calculate_musical_sophistication(
-        self,
-        melody_section: Dict[str, Any],
-        harmony_section: Dict[str, Any],
-        key_detection: Dict[str, Any],
+        self, melody_section: Dict[str, Any], harmony_section: Dict[str, Any], key_detection: Any
     ) -> float:
         """Calculate overall musical sophistication."""
         try:
@@ -267,40 +218,28 @@ class MelodyHarmonyAnalyzer:
 
             # If very low musical content, return low sophistication
             if melody_coverage < 0.3 or key_confidence < 0.3:
-                return min(0.3, melody_coverage * key_confidence)
+                return float(min(0.3, melody_coverage * key_confidence))
 
             # Melody sophistication factors
             melody_range = melody_section.get('range', {}).get('range_octaves', 0.0)
-            melody_complexity = melody_section.get('direction', {}).get(
-                'contour_complexity', 0.0
-            )
+            melody_complexity = melody_section.get('direction', {}).get('contour_complexity', 0.0)
             interval_variety = (
                 len(
                     [
                         k
                         for k, v in melody_section.get('intervals', {}).items()
-                        if v > 0
-                        and k
-                        not in [
-                            'small_intervals',
-                            'medium_intervals',
-                            'large_intervals',
-                        ]
+                        if v > 0 and k not in ['small_intervals', 'medium_intervals', 'large_intervals']
                     ]
                 )
                 / 12.0
             )
 
             # Harmony sophistication factors
-            harmony_complexity = harmony_section.get('complexity', {}).get(
-                'harmonic_complexity', 0.0
-            )
+            harmony_complexity = harmony_section.get('complexity', {}).get('harmonic_complexity', 0.0)
             consonance_balance = abs(
                 0.5 - harmony_section.get('consonance', {}).get('consonance_score', 0.5)
             )  # Balance between consonance/dissonance
-            harmonic_rhythm = min(
-                1.0, harmony_section.get('rhythm', {}).get('harmonic_rhythm', 0.0) / 5.0
-            )  # Normalize
+            harmonic_rhythm = min(1.0, harmony_section.get('rhythm', {}).get('harmonic_rhythm', 0.0) / 5.0)  # Normalize
 
             # Weighted combination with quality gates
             sophistication = (

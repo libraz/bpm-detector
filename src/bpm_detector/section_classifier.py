@@ -1,8 +1,7 @@
 """Section classification module for musical structure analysis."""
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional
 
-import librosa
 import numpy as np
 
 from .context_analyzer import ContextAnalyzer
@@ -23,11 +22,7 @@ class SectionClassifier:
         self.context_analyzer = ContextAnalyzer()
 
     def classify_sections(
-        self,
-        y: np.ndarray,
-        sr: int,
-        boundaries: List[int],
-        similarity_matrix: np.ndarray = None,
+        self, y: np.ndarray, sr: int, boundaries: List[int], similarity_matrix: Optional[np.ndarray] = None
     ) -> List[Dict[str, Any]]:
         """Classify sections based on audio characteristics and boundaries.
 
@@ -43,7 +38,7 @@ class SectionClassifier:
         if len(boundaries) < 2:
             return []
 
-        sections = []
+        sections: List[Dict[str, Any]] = []
         all_characteristics = []
 
         # First pass: Extract characteristics for all sections
@@ -61,10 +56,8 @@ class SectionClassifier:
             segment = y[start_sample:end_sample]
 
             # Analyze characteristics
-            characteristics = (
-                self.feature_analyzer.analyze_segment_characteristics_enhanced(
-                    segment, sr, start_time, end_time
-                )
+            characteristics = self.feature_analyzer.analyze_segment_characteristics_enhanced(
+                segment, sr, start_time, end_time
             )
 
             all_characteristics.append(characteristics)
@@ -76,15 +69,11 @@ class SectionClassifier:
         for i, characteristics in enumerate(all_characteristics):
             # Get context
             previous_sections = sections.copy()  # All previous sections
-            next_sections = all_characteristics[
-                i + 1 : i + 4
-            ]  # Next 3 sections for context
+            next_sections = all_characteristics[i + 1 : i + 4]  # Next 3 sections for context
 
             # Enhanced classification with full context
-            section_type = (
-                self.context_analyzer.classify_section_type_with_enhanced_context(
-                    characteristics, previous_sections, next_sections, all_energies, i
-                )
+            section_type = self.context_analyzer.classify_section_type_with_enhanced_context(
+                characteristics, previous_sections, next_sections, all_energies, i
             )
 
             # Create section
@@ -100,9 +89,7 @@ class SectionClassifier:
 
         # Post-processing: Apply repetition detection if similarity matrix is provided
         if similarity_matrix is not None:
-            repeated_indices = self.context_analyzer.detect_verse_repetition(
-                similarity_matrix, sections
-            )
+            repeated_indices = self.context_analyzer.detect_verse_repetition(similarity_matrix, sections)
 
             # Mark repeated sections
             for idx in repeated_indices:
@@ -121,27 +108,16 @@ class SectionClassifier:
     ) -> str:
         """Enhanced section type classification with full context."""
         return self.context_analyzer.classify_section_type_with_enhanced_context(
-            characteristics,
-            previous_sections,
-            next_sections,
-            all_energies,
-            current_index,
+            characteristics, previous_sections, next_sections, all_energies, current_index
         )
 
     def _classify_with_relative_energy(
-        self,
-        characteristics: Dict[str, Any],
-        all_energies: List[float],
-        current_index: int,
+        self, characteristics: Dict[str, Any], all_energies: List[float], current_index: int
     ) -> str:
         """Classify section type based on relative energy analysis."""
-        return self.context_analyzer.classify_with_relative_energy(
-            characteristics, all_energies, current_index
-        )
+        return self.context_analyzer.classify_with_relative_energy(characteristics, all_energies, current_index)
 
-    def _analyze_energy_trend(
-        self, current_index: int, all_energies: List[float]
-    ) -> str:
+    def _analyze_energy_trend(self, current_index: int, all_energies: List[float]) -> str:
         """Analyze energy trend around current position."""
         return self.context_analyzer._analyze_energy_trend(current_index, all_energies)
 
@@ -165,31 +141,23 @@ class SectionClassifier:
         section_index: int,
     ) -> str:
         """Apply context-based rules for section classification."""
-        return self.context_analyzer.apply_context_rules(
-            base_type, previous_sections, characteristics, section_index
-        )
+        return self.context_analyzer.apply_context_rules(base_type, previous_sections, characteristics, section_index)
 
     def _is_energy_building_enhanced(
         self, prev_section: Dict[str, Any], current_characteristics: Dict[str, Any]
     ) -> bool:
         """Enhanced energy building detection."""
-        return self.context_analyzer._is_energy_building_enhanced(
-            prev_section, current_characteristics
-        )
+        return self.context_analyzer._is_energy_building_enhanced(prev_section, current_characteristics)
 
-    def _resolve_consecutive_sections(
-        self, section_type: str, characteristics: Dict[str, Any]
-    ) -> str:
+    def _resolve_consecutive_sections(self, section_type: str, characteristics: Dict[str, Any]) -> str:
         """Resolve consecutive sections of the same type."""
-        return self.context_analyzer._resolve_consecutive_sections(
-            section_type, characteristics
-        )
+        return self.context_analyzer._resolve_consecutive_sections(section_type, characteristics)
 
     def _classify_section_type_with_context(
         self,
         characteristics: Dict[str, Any],
         previous_sections: List[Dict[str, Any]],
-        similarity_matrix: np.ndarray = None,
+        similarity_matrix: Optional[np.ndarray] = None,
         section_index: int = 0,
     ) -> str:
         """Classify section type with context analysis."""
@@ -209,36 +177,24 @@ class SectionClassifier:
         self, segment: np.ndarray, sr: int, start_time: float, end_time: float
     ) -> Dict[str, Any]:
         """Enhanced segment analysis with additional features."""
-        return self.feature_analyzer.analyze_segment_characteristics_enhanced(
-            segment, sr, start_time, end_time
-        )
+        return self.feature_analyzer.analyze_segment_characteristics_enhanced(segment, sr, start_time, end_time)
 
-    def _analyze_segment_characteristics(
-        self, segment: np.ndarray, sr: int
-    ) -> Dict[str, Any]:
+    def _analyze_segment_characteristics(self, segment: np.ndarray, sr: int) -> Dict[str, Any]:
         """Analyze basic characteristics of an audio segment."""
         return self.feature_analyzer.analyze_segment_characteristics(segment, sr)
 
-    def _is_energy_building(
-        self, prev_section: Dict[str, Any], current_characteristics: Dict[str, Any]
-    ) -> bool:
+    def _is_energy_building(self, prev_section: Dict[str, Any], current_characteristics: Dict[str, Any]) -> bool:
         """Detect if energy is building from previous section."""
         # Extract characteristics from prev_section if it has nested structure
         if 'characteristics' in prev_section:
             prev_chars = prev_section['characteristics']
         else:
             prev_chars = prev_section
-        return self.context_analyzer._is_energy_building_enhanced(
-            prev_chars, current_characteristics
-        )
+        return self.context_analyzer._is_energy_building_enhanced(prev_chars, current_characteristics)
 
-    def _detect_spoken_word(
-        self, segment: np.ndarray, sr: int, energy: float, complexity: float
-    ) -> bool:
+    def _detect_spoken_word(self, segment: np.ndarray, sr: int, energy: float, complexity: float) -> bool:
         """Detect if segment contains spoken word."""
-        return self.feature_analyzer._detect_spoken_word(
-            segment, sr, energy, complexity
-        )
+        return self.feature_analyzer._detect_spoken_word(segment, sr, energy, complexity)
 
     def _detect_vocal_presence(self, segment: np.ndarray, sr: int) -> bool:
         """Detect vocal presence in segment."""
@@ -247,44 +203,32 @@ class SectionClassifier:
     def _classify_section_type(
         self,
         characteristics: Dict[str, Any],
-        previous_sections: List[Dict[str, Any]] = None,
-        similarity_matrix: np.ndarray = None,
+        previous_sections: Optional[List[Dict[str, Any]]] = None,
+        similarity_matrix: Optional[np.ndarray] = None,
     ) -> str:
         """Basic section type classification."""
         if previous_sections is None:
             previous_sections = []
 
         return self.context_analyzer.classify_section_type_with_context(
-            characteristics,
-            previous_sections,
-            similarity_matrix,
-            len(previous_sections),
+            characteristics, previous_sections, similarity_matrix, len(previous_sections)
         )
 
     def _calculate_voiced_ratio(self, characteristics: Dict[str, Any]) -> float:
         """Calculate voiced ratio from characteristics."""
         return self.feature_analyzer._calculate_voiced_ratio(characteristics)
 
-    def _find_first_peak_time(
-        self, characteristics: Dict[str, Any], start_time: float
-    ) -> float:
+    def _find_first_peak_time(self, characteristics: Dict[str, Any], start_time: float) -> float:
         """Find first peak time in segment."""
         return self.feature_analyzer._find_first_peak_time(characteristics, start_time)
 
     def _detect_verse_repetition(
-        self,
-        similarity_matrix: np.ndarray,
-        sections: List[Dict[str, Any]],
-        threshold: float = 0.8,
+        self, similarity_matrix: np.ndarray, sections: List[Dict[str, Any]], threshold: float = 0.8
     ) -> List[int]:
         """Detect verse repetition patterns."""
-        return self.context_analyzer.detect_verse_repetition(
-            similarity_matrix, sections, threshold
-        )
+        return self.context_analyzer.detect_verse_repetition(similarity_matrix, sections, threshold)
 
-    def _calculate_confidence(
-        self, characteristics: Dict[str, Any], section_type: str
-    ) -> float:
+    def _calculate_confidence(self, characteristics: Dict[str, Any], section_type: str) -> float:
         """Calculate confidence score for section classification.
 
         Args:

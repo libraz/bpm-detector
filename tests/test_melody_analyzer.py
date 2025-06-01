@@ -1,7 +1,7 @@
 """Tests for melody analyzer module."""
 
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import numpy as np
 
@@ -29,9 +29,7 @@ class TestMelodyAnalyzer(unittest.TestCase):
             start_idx = int(i * note_duration * self.sr)
             end_idx = int((i + 1) * note_duration * self.sr)
             if end_idx <= len(t):
-                self.melodic_audio[start_idx:end_idx] = np.sin(
-                    2 * np.pi * freq * t[start_idx:end_idx]
-                )
+                self.melodic_audio[start_idx:end_idx] = np.sin(2 * np.pi * freq * t[start_idx:end_idx])
 
         # Create audio with wide melodic range
         wide_range_freqs = [130.81, 523.25]  # C3 to C5 (2 octaves)
@@ -40,19 +38,14 @@ class TestMelodyAnalyzer(unittest.TestCase):
             start_idx = int(i * (duration / 2) * self.sr)
             end_idx = int((i + 1) * (duration / 2) * self.sr)
             if end_idx <= len(t):
-                self.wide_range_audio[start_idx:end_idx] = np.sin(
-                    2 * np.pi * freq * t[start_idx:end_idx]
-                )
+                self.wide_range_audio[start_idx:end_idx] = np.sin(2 * np.pi * freq * t[start_idx:end_idx])
 
         # Create audio with vibrato
         vibrato_freq = 440.0
         vibrato_rate = 5.0  # 5 Hz vibrato
         vibrato_depth = 10.0  # 10 Hz depth
         self.vibrato_audio = np.sin(
-            2
-            * np.pi
-            * (vibrato_freq + vibrato_depth * np.sin(2 * np.pi * vibrato_rate * t))
-            * t
+            2 * np.pi * (vibrato_freq + vibrato_depth * np.sin(2 * np.pi * vibrato_rate * t)) * t
         )
 
     def test_initialization(self):
@@ -123,18 +116,14 @@ class TestMelodyAnalyzer(unittest.TestCase):
         self.assertIsInstance(range_analysis['vocal_range_classification'], str)
 
         # Check logical relationships
-        self.assertLessEqual(
-            range_analysis['lowest_note'], range_analysis['highest_note']
-        )
+        self.assertLessEqual(range_analysis['lowest_note'], range_analysis['highest_note'])
         self.assertGreaterEqual(range_analysis['range_semitones'], 0)
         self.assertGreaterEqual(range_analysis['range_octaves'], 0)
 
     def test_extract_vocal_range(self):
         """Test vocal range extraction."""
         # Create notes with some non-vocal frequencies
-        all_notes = np.array(
-            [50, 100, 200, 300, 400, 500, 1000, 2000, 3000]
-        )  # Mix of vocal and non-vocal
+        all_notes = np.array([50, 100, 200, 300, 400, 500, 1000, 2000, 3000])  # Mix of vocal and non-vocal
 
         vocal_notes = self.analyzer._extract_vocal_range(all_notes)
 
@@ -155,12 +144,7 @@ class TestMelodyAnalyzer(unittest.TestCase):
         direction_analysis = self.analyzer.analyze_melodic_direction(ascending_melody)
 
         # Check required fields
-        expected_fields = [
-            'overall_direction',
-            'direction_changes',
-            'step_sizes',
-            'contour_complexity',
-        ]
+        expected_fields = ['overall_direction', 'direction_changes', 'step_sizes', 'contour_complexity']
         for field in expected_fields:
             self.assertIn(field, direction_analysis)
 
@@ -187,16 +171,12 @@ class TestMelodyAnalyzer(unittest.TestCase):
         """Test interval distribution analysis."""
         # Create melody with known intervals
         melody_with_intervals = {
-            'f0': np.array(
-                [261.63, 293.66, 329.63, 261.63]
-            ),  # C-D-E-C (whole step, whole step, major third down)
+            'f0': np.array([261.63, 293.66, 329.63, 261.63]),  # C-D-E-C (whole step, whole step, major third down)
             'voiced_flag': np.array([True, True, True, True]),
             'voiced_prob': np.array([0.9, 0.8, 0.85, 0.9]),
         }
 
-        interval_analysis = self.analyzer.analyze_interval_distribution(
-            melody_with_intervals
-        )
+        interval_analysis = self.analyzer.analyze_interval_distribution(melody_with_intervals)
 
         # Check that it returns a dictionary
         self.assertIsInstance(interval_analysis, dict)
@@ -221,12 +201,7 @@ class TestMelodyAnalyzer(unittest.TestCase):
         stability_analysis = self.analyzer.analyze_pitch_stability(stable_melody)
 
         # Check required fields
-        expected_fields = [
-            'pitch_stability',
-            'vibrato_rate',
-            'vibrato_extent',
-            'pitch_drift',
-        ]
+        expected_fields = ['pitch_stability', 'vibrato_rate', 'vibrato_extent', 'pitch_drift']
         for field in expected_fields:
             self.assertIn(field, stability_analysis)
             self.assertIsInstance(stability_analysis[field], (int, float))
@@ -235,9 +210,7 @@ class TestMelodyAnalyzer(unittest.TestCase):
         self.assertGreater(stability_analysis['pitch_stability'], 0.8)
 
         # Create unstable melody with vibrato
-        vibrato_f0 = 440.0 + 10 * np.sin(
-            2 * np.pi * 5 * np.linspace(0, 2, 100)
-        )  # 5 Hz vibrato
+        vibrato_f0 = 440.0 + 10 * np.sin(2 * np.pi * 5 * np.linspace(0, 2, 100))  # 5 Hz vibrato
         unstable_melody = {
             'f0': vibrato_f0,
             'voiced_flag': np.array([True] * 100),
@@ -247,9 +220,7 @@ class TestMelodyAnalyzer(unittest.TestCase):
         unstable_analysis = self.analyzer.analyze_pitch_stability(unstable_melody)
 
         # Unstable pitch should have lower stability
-        self.assertLess(
-            unstable_analysis['pitch_stability'], stability_analysis['pitch_stability']
-        )
+        self.assertLess(unstable_analysis['pitch_stability'], stability_analysis['pitch_stability'])
 
         # Should detect vibrato
         self.assertGreater(unstable_analysis['vibrato_rate'], 0)
@@ -259,9 +230,7 @@ class TestMelodyAnalyzer(unittest.TestCase):
         # Create signal with known vibrato
         vibrato_rate = 5.0  # 5 Hz
         vibrato_extent = 10.0  # 10 Hz extent
-        f0_with_vibrato = 440.0 + vibrato_extent * np.sin(
-            2 * np.pi * vibrato_rate * np.linspace(0, 2, 100)
-        )
+        f0_with_vibrato = 440.0 + vibrato_extent * np.sin(2 * np.pi * vibrato_rate * np.linspace(0, 2, 100))
 
         detected_rate, detected_extent = self.analyzer._detect_vibrato(f0_with_vibrato)
 
@@ -272,12 +241,8 @@ class TestMelodyAnalyzer(unittest.TestCase):
         self.assertGreater(detected_extent, 0)
 
         # Should be reasonably close to actual values
-        self.assertLess(
-            abs(detected_rate - vibrato_rate), 1.0
-        )  # Within 1.0 Hz (reasonable precision)
-        self.assertLess(
-            abs(detected_extent - vibrato_extent), 10.0
-        )  # Within 10 Hz (reasonable for extent)
+        self.assertLess(abs(detected_rate - vibrato_rate), 1.0)  # Within 1.0 Hz (reasonable precision)
+        self.assertLess(abs(detected_extent - vibrato_extent), 10.0)  # Within 10 Hz (reasonable for extent)
 
     def test_calculate_pitch_drift(self):
         """Test pitch drift calculation."""
@@ -298,11 +263,7 @@ class TestMelodyAnalyzer(unittest.TestCase):
 
     def test_empty_melody_handling(self):
         """Test handling of empty melody."""
-        empty_melody = {
-            'f0': np.array([]),
-            'voiced_flag': np.array([]),
-            'voiced_prob': np.array([]),
-        }
+        empty_melody = {'f0': np.array([]), 'voiced_flag': np.array([]), 'voiced_prob': np.array([])}
 
         try:
             range_analysis = self.analyzer.analyze_melodic_range(empty_melody)
@@ -330,11 +291,7 @@ class TestMelodyAnalyzer(unittest.TestCase):
 
     def test_single_note_melody(self):
         """Test handling of single note melody."""
-        single_note_melody = {
-            'f0': np.array([440.0]),
-            'voiced_flag': np.array([True]),
-            'voiced_prob': np.array([0.9]),
-        }
+        single_note_melody = {'f0': np.array([440.0]), 'voiced_flag': np.array([True]), 'voiced_prob': np.array([0.9])}
 
         direction_analysis = self.analyzer.analyze_melodic_direction(single_note_melody)
 
@@ -368,9 +325,7 @@ class TestMelodyAnalyzer(unittest.TestCase):
             'voiced_prob': np.array([0.9, 0.9]),
         }
 
-        interval_analysis = self.analyzer.analyze_interval_distribution(
-            large_interval_melody
-        )
+        interval_analysis = self.analyzer.analyze_interval_distribution(large_interval_melody)
 
         # Should detect large intervals
         if 'large_intervals' in interval_analysis:
@@ -387,9 +342,7 @@ class TestMelodyAnalyzer(unittest.TestCase):
 
         # Complex melody (many notes, large intervals, direction changes)
         complex_melody = {
-            'f0': np.array(
-                [261.63, 392.00, 220.00, 523.25, 174.61, 440.00]
-            ),  # C4-G4-A3-C5-F3-A4
+            'f0': np.array([261.63, 392.00, 220.00, 523.25, 174.61, 440.00]),  # C4-G4-A3-C5-F3-A4
             'voiced_flag': np.array([True, True, True, True, True, True]),
             'voiced_prob': np.array([0.9, 0.8, 0.85, 0.9, 0.88, 0.87]),
         }
@@ -398,16 +351,10 @@ class TestMelodyAnalyzer(unittest.TestCase):
         complex_direction = self.analyzer.analyze_melodic_direction(complex_melody)
 
         # Complex melody should have more direction changes
-        self.assertGreater(
-            complex_direction['direction_changes'],
-            simple_direction['direction_changes'],
-        )
+        self.assertGreater(complex_direction['direction_changes'], simple_direction['direction_changes'])
 
         # Complex melody should have higher contour complexity
-        self.assertGreater(
-            complex_direction['contour_complexity'],
-            simple_direction['contour_complexity'],
-        )
+        self.assertGreater(complex_direction['contour_complexity'], simple_direction['contour_complexity'])
 
 
 if __name__ == '__main__':

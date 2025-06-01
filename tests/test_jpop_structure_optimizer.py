@@ -95,33 +95,21 @@ class TestJPopStructureOptimizer(unittest.TestCase):
             },  # Already chorus
         ]
 
-        processed = self.optimizer.enforce_pre_chorus_chorus_pairing(
-            test_sections.copy()
-        )
+        processed = self.optimizer.enforce_pre_chorus_chorus_pairing(test_sections.copy())
 
         # Check that pairing rules are enforced
         has_pre_chorus_chorus_pair = False
         for i in range(len(processed) - 1):
-            if (
-                processed[i]['type'] == 'pre_chorus'
-                and processed[i + 1]['type'] == 'chorus'
-            ):
+            if processed[i]['type'] == 'pre_chorus' and processed[i + 1]['type'] == 'chorus':
                 has_pre_chorus_chorus_pair = True
                 break
 
         # Should upgrade verse to pre_chorus if it precedes chorus and has sufficient energy
         if processed[0]['energy_level'] > 0.4:
-            expected_pairing = (
-                processed[0]['type'] == 'pre_chorus' or has_pre_chorus_chorus_pair
-            )
-            self.assertTrue(
-                expected_pairing,
-                "Should have pre_chorus → chorus pairing or upgrade verse",
-            )
+            expected_pairing = processed[0]['type'] == 'pre_chorus' or has_pre_chorus_chorus_pair
+            self.assertTrue(expected_pairing, "Should have pre_chorus → chorus pairing or upgrade verse")
         else:
-            self.assertTrue(
-                has_pre_chorus_chorus_pair, "Should have pre_chorus → chorus pairing"
-            )
+            self.assertTrue(has_pre_chorus_chorus_pair, "Should have pre_chorus → chorus pairing")
 
     def test_collapse_alternating_ar_patterns(self):
         """Test A-R alternating pattern collapse."""
@@ -155,9 +143,7 @@ class TestJPopStructureOptimizer(unittest.TestCase):
             },  # Should become chorus
         ]
 
-        processed = self.optimizer.collapse_alternating_ar_patterns(
-            test_sections.copy()
-        )
+        processed = self.optimizer.collapse_alternating_ar_patterns(test_sections.copy())
 
         # Third section (verse) should be converted to chorus
         self.assertEqual(processed[2]['type'], 'chorus')
@@ -200,9 +186,7 @@ class TestJPopStructureOptimizer(unittest.TestCase):
         t = np.linspace(0, duration, int(self.sr * duration))
         y = 0.5 * np.sin(2 * np.pi * 440 * t)
 
-        processed = self.optimizer.break_consecutive_chorus_chains(
-            consecutive_chorus_pattern, y, self.sr, self.bpm
-        )
+        processed = self.optimizer.break_consecutive_chorus_chains(consecutive_chorus_pattern, y, self.sr, self.bpm)
 
         # Should have vocal_ratio added to all sections
         for section in processed:
@@ -294,18 +278,12 @@ class TestJPopStructureOptimizer(unittest.TestCase):
 
         # More complex signal (simulating vocal)
         y_vocal = (
-            0.3 * np.sin(2 * np.pi * 440 * t)
-            + 0.2 * np.sin(2 * np.pi * 880 * t)
-            + 0.1 * np.sin(2 * np.pi * 1760 * t)
+            0.3 * np.sin(2 * np.pi * 440 * t) + 0.2 * np.sin(2 * np.pi * 880 * t) + 0.1 * np.sin(2 * np.pi * 1760 * t)
         )
 
         # Test vocal detection
-        vocal_ratio_instrumental = self.optimizer._detect_vocal_presence(
-            y_instrumental, self.sr, 0.0, 5.0
-        )
-        vocal_ratio_vocal = self.optimizer._detect_vocal_presence(
-            y_vocal, self.sr, 0.0, 5.0
-        )
+        vocal_ratio_instrumental = self.optimizer._detect_vocal_presence(y_instrumental, self.sr, 0.0, 5.0)
+        vocal_ratio_vocal = self.optimizer._detect_vocal_presence(y_vocal, self.sr, 0.0, 5.0)
 
         # Both should return valid ratios
         self.assertIsInstance(vocal_ratio_instrumental, (int, float))

@@ -1,11 +1,11 @@
 """Tests for key detector module."""
 
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import numpy as np
 
-from src.bpm_detector.key_detector import KeyDetectionResult, KeyDetector
+from src.bpm_detector.key_detector import KeyDetector
 
 
 class TestKeyDetector(unittest.TestCase):
@@ -29,9 +29,7 @@ class TestKeyDetector(unittest.TestCase):
             start_idx = int(i * note_duration * self.sr)
             end_idx = int((i + 1) * note_duration * self.sr)
             if end_idx <= len(t):
-                self.c_major_audio[start_idx:end_idx] = np.sin(
-                    2 * np.pi * freq * t[start_idx:end_idx]
-                )
+                self.c_major_audio[start_idx:end_idx] = np.sin(2 * np.pi * freq * t[start_idx:end_idx])
 
         # Create test audio for A minor (relative minor of C major)
         a_minor_freqs = [220.00, 246.94, 261.63, 293.66, 329.63, 349.23, 392.00, 440.00]
@@ -41,9 +39,7 @@ class TestKeyDetector(unittest.TestCase):
             start_idx = int(i * note_duration * self.sr)
             end_idx = int((i + 1) * note_duration * self.sr)
             if end_idx <= len(t):
-                self.a_minor_audio[start_idx:end_idx] = np.sin(
-                    2 * np.pi * freq * t[start_idx:end_idx]
-                )
+                self.a_minor_audio[start_idx:end_idx] = np.sin(2 * np.pi * freq * t[start_idx:end_idx])
 
     def test_initialization(self):
         """Test detector initialization."""
@@ -66,9 +62,7 @@ class TestKeyDetector(unittest.TestCase):
         mock_chroma_data[7, :] = 0.6  # G
         mock_chroma.return_value = mock_chroma_data
 
-        result = self.detector.detect_key(
-            self.c_major_audio, self.sr, _feature_backend='stft'
-        )
+        result = self.detector.detect_key(self.c_major_audio, self.sr, _feature_backend='stft')
 
         # Check result structure
         self.assertIsInstance(result, dict)
@@ -100,9 +94,7 @@ class TestKeyDetector(unittest.TestCase):
         mock_chroma_data[4, :] = 0.6  # E
         mock_chroma.return_value = mock_chroma_data
 
-        result = self.detector.detect_key(
-            self.a_minor_audio, self.sr, _feature_backend='stft'
-        )
+        result = self.detector.detect_key(self.a_minor_audio, self.sr, _feature_backend='stft')
 
         # Should detect A minor
         self.assertEqual(result['key'], 'A')
@@ -123,9 +115,7 @@ class TestKeyDetector(unittest.TestCase):
         mock_chroma_data = np.random.rand(12, 100)
         mock_chroma.return_value = mock_chroma_data
 
-        chroma = self.detector._extract_chroma_features(
-            self.c_major_audio, self.sr, backend='stft'
-        )
+        chroma = self.detector._extract_chroma_features(self.c_major_audio, self.sr, backend='stft')
 
         # Should return chroma features
         self.assertIsInstance(chroma, np.ndarray)
@@ -139,9 +129,7 @@ class TestKeyDetector(unittest.TestCase):
         empty_audio = np.array([])
 
         try:
-            result = self.detector.detect_key(
-                empty_audio, self.sr, _feature_backend='stft'
-            )
+            result = self.detector.detect_key(empty_audio, self.sr, _feature_backend='stft')
             # Should handle empty input gracefully
             self.assertIsInstance(result, dict)
         except (ValueError, IndexError):
@@ -178,9 +166,7 @@ class TestKeyDetector(unittest.TestCase):
         """Test handling of silent audio."""
         silent_audio = np.zeros(self.sr * 2)
 
-        result = self.detector.detect_key(
-            silent_audio, self.sr, _feature_backend='stft'
-        )
+        result = self.detector.detect_key(silent_audio, self.sr, _feature_backend='stft')
 
         # Should handle silence gracefully
         self.assertIsInstance(result, dict)
@@ -192,16 +178,11 @@ class TestKeyDetector(unittest.TestCase):
         """Test key detection with external hints."""
         # Test with correct hint
         result_with_hint = self.detector.detect_key(
-            self.c_major_audio,
-            self.sr,
-            external_key_hint='C Major',
-            _feature_backend='stft',
+            self.c_major_audio, self.sr, external_key_hint='C Major', _feature_backend='stft'
         )
 
         # Test without hint
-        result_without_hint = self.detector.detect_key(
-            self.c_major_audio, self.sr, _feature_backend='stft'
-        )
+        result_without_hint = self.detector.detect_key(self.c_major_audio, self.sr, _feature_backend='stft')
 
         # Both should return valid results
         self.assertIsInstance(result_with_hint, dict)
@@ -210,23 +191,18 @@ class TestKeyDetector(unittest.TestCase):
         # Hint should potentially improve confidence
         if result_with_hint['key'] == 'C' and result_with_hint['mode'] == 'Major':
             self.assertGreaterEqual(
-                result_with_hint['confidence'],
-                result_without_hint['confidence'] * 0.9,  # Allow some tolerance
+                result_with_hint['confidence'], result_without_hint['confidence'] * 0.9  # Allow some tolerance
             )
 
     def test_different_hop_lengths(self):
         """Test detector with different hop lengths."""
         # Test with smaller hop length
         small_hop_detector = KeyDetector(hop_length=256)
-        small_hop_result = small_hop_detector.detect_key(
-            self.c_major_audio, self.sr, _feature_backend='stft'
-        )
+        small_hop_result = small_hop_detector.detect_key(self.c_major_audio, self.sr, _feature_backend='stft')
 
         # Test with larger hop length
         large_hop_detector = KeyDetector(hop_length=1024)
-        large_hop_result = large_hop_detector.detect_key(
-            self.c_major_audio, self.sr, _feature_backend='stft'
-        )
+        large_hop_result = large_hop_detector.detect_key(self.c_major_audio, self.sr, _feature_backend='stft')
 
         # Both should produce valid results
         self.assertIsInstance(small_hop_result, dict)
@@ -239,17 +215,12 @@ class TestKeyDetector(unittest.TestCase):
     def test_relative_major_minor_detection(self):
         """Test detection of relative major/minor keys."""
         # C major and A minor share the same notes
-        c_major_result = self.detector.detect_key(
-            self.c_major_audio, self.sr, _feature_backend='stft'
-        )
-        a_minor_result = self.detector.detect_key(
-            self.a_minor_audio, self.sr, _feature_backend='stft'
-        )
+        c_major_result = self.detector.detect_key(self.c_major_audio, self.sr, _feature_backend='stft')
+        a_minor_result = self.detector.detect_key(self.a_minor_audio, self.sr, _feature_backend='stft')
 
         # Should detect different modes
         self.assertNotEqual(
-            (c_major_result['key'], c_major_result['mode']),
-            (a_minor_result['key'], a_minor_result['mode']),
+            (c_major_result['key'], c_major_result['mode']), (a_minor_result['key'], a_minor_result['mode'])
         )
 
         # Should have reasonable confidence for both

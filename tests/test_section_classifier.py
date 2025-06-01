@@ -1,7 +1,6 @@
 """Tests for section classifier module."""
 
 import unittest
-from unittest.mock import MagicMock, patch
 
 import numpy as np
 
@@ -25,9 +24,7 @@ class TestSectionClassifier(unittest.TestCase):
 
         # High energy segment (chorus-like)
         self.high_energy_segment = 0.8 * (
-            np.sin(2 * np.pi * 440 * t)
-            + 0.5 * np.sin(2 * np.pi * 880 * t)
-            + 0.3 * np.random.randn(len(t))
+            np.sin(2 * np.pi * 440 * t) + 0.5 * np.sin(2 * np.pi * 880 * t) + 0.3 * np.random.randn(len(t))
         )
 
         # Medium energy segment (verse-like)
@@ -43,13 +40,7 @@ class TestSectionClassifier(unittest.TestCase):
     def test_classify_sections_basic(self):
         """Test basic section classification."""
         # Combine segments
-        y = np.concatenate(
-            [
-                self.low_energy_segment,
-                self.medium_energy_segment,
-                self.high_energy_segment,
-            ]
-        )
+        y = np.concatenate([self.low_energy_segment, self.medium_energy_segment, self.high_energy_segment])
         boundaries = [
             0,
             len(self.low_energy_segment),
@@ -74,30 +65,19 @@ class TestSectionClassifier(unittest.TestCase):
             # Check time ordering
             self.assertLessEqual(section['start_time'], section['end_time'])
 
-            # Check that characteristics is a list
-            self.assertIsInstance(section['characteristics'], list)
+            # Check that characteristics is a dict
+            self.assertIsInstance(section['characteristics'], dict)
 
             # Check type is valid
-            valid_types = [
-                'intro',
-                'verse',
-                'chorus',
-                'bridge',
-                'outro',
-                'instrumental',
-                'breakdown',
-                'buildup',
-            ]
+            valid_types = ['intro', 'verse', 'chorus', 'bridge', 'outro', 'instrumental', 'breakdown', 'buildup']
             self.assertIn(section['type'], valid_types)
 
     def test_analyze_segment_characteristics(self):
         """Test segment characteristic analysis."""
-        characteristics = self.classifier._analyze_segment_characteristics(
-            self.high_energy_segment, self.sr
-        )
+        characteristics = self.classifier._analyze_segment_characteristics(self.high_energy_segment, self.sr)
 
         # Check required characteristics (based on actual implementation)
-        required_chars = ['energy', 'complexity', 'brightness']
+        required_chars = ['energy', 'spectral_complexity', 'spectral_centroid']
         for char in required_chars:
             self.assertIn(char, characteristics)
             self.assertIsInstance(characteristics[char], (int, float))
@@ -105,50 +85,30 @@ class TestSectionClassifier(unittest.TestCase):
         # Energy should be reasonable for high energy segment
         self.assertGreater(characteristics['energy'], 0.0)
 
-        # Complexity should be positive
-        self.assertGreater(characteristics['complexity'], 0.0)
+        # Spectral complexity should be positive
+        self.assertGreater(characteristics['spectral_complexity'], 0.0)
 
     def test_classify_section_type_with_context(self):
         """Test section type classification with context."""
         # Create characteristics for different section types
-        intro_chars = {
-            'energy': 0.2,
-            'complexity': 0.3,
-            'brightness': 0.4,
-            'labels': ['low_energy', 'simple'],
-        }
+        intro_chars = {'energy': 0.2, 'spectral_complexity': 0.3, 'spectral_centroid': 1500.0, 'harmonic_content': 0.4}
 
-        verse_chars = {
-            'energy': 0.5,
-            'complexity': 0.6,
-            'brightness': 0.7,
-            'labels': ['mid_energy', 'complex', 'vocal_present'],
-        }
+        verse_chars = {'energy': 0.5, 'spectral_complexity': 0.6, 'spectral_centroid': 2000.0, 'harmonic_content': 0.7}
 
-        chorus_chars = {
-            'energy': 0.9,
-            'complexity': 0.8,
-            'brightness': 0.9,
-            'labels': ['high_energy', 'complex', 'bright', 'vocal_present'],
-        }
+        chorus_chars = {'energy': 0.9, 'spectral_complexity': 0.8, 'spectral_centroid': 2500.0, 'harmonic_content': 0.9}
 
         # Test classification
-        intro_result = self.classifier._classify_section_type_with_context(
-            intro_chars, 0, 3, []
-        )
+        intro_result = self.classifier._classify_section_type_with_context(intro_chars, [], None, 0)
 
         verse_result = self.classifier._classify_section_type_with_context(
-            verse_chars, 1, 3, [{'type': 'intro', 'characteristics': intro_chars}]
+            verse_chars, [{'type': 'intro', 'characteristics': intro_chars}], None, 1
         )
 
         chorus_result = self.classifier._classify_section_type_with_context(
             chorus_chars,
+            [{'type': 'intro', 'characteristics': intro_chars}, {'type': 'verse', 'characteristics': verse_chars}],
+            None,
             2,
-            3,
-            [
-                {'type': 'intro', 'characteristics': intro_chars},
-                {'type': 'verse', 'characteristics': verse_chars},
-            ],
         )
 
         # Check results
@@ -159,6 +119,7 @@ class TestSectionClassifier(unittest.TestCase):
             'intro',
             'verse',
             'chorus',
+            'pre_chorus',
             'bridge',
             'outro',
             'instrumental',
@@ -171,19 +132,15 @@ class TestSectionClassifier(unittest.TestCase):
 
     def test_is_energy_building(self):
         """Test energy building detection."""
-        low_energy_chars = {'energy': 0.3, 'complexity': 0.2}
-        high_energy_chars = {'energy': 0.8, 'complexity': 0.7}
+        low_energy_chars = {'energy': 0.3, 'spectral_complexity': 0.2}
+        high_energy_chars = {'energy': 0.8, 'spectral_complexity': 0.7}
 
         # Test energy building
-        is_building = self.classifier._is_energy_building(
-            {'characteristics': low_energy_chars}, high_energy_chars
-        )
+        is_building = self.classifier._is_energy_building({'characteristics': low_energy_chars}, high_energy_chars)
         self.assertTrue(is_building)
 
         # Test energy not building
-        is_not_building = self.classifier._is_energy_building(
-            {'characteristics': high_energy_chars}, low_energy_chars
-        )
+        is_not_building = self.classifier._is_energy_building({'characteristics': high_energy_chars}, low_energy_chars)
         self.assertFalse(is_not_building)
 
     def test_detect_spoken_word(self):
@@ -191,9 +148,7 @@ class TestSectionClassifier(unittest.TestCase):
         # Create a segment with speech-like characteristics
         speech_like = np.random.randn(self.sr * 2) * 0.1  # Low energy, noisy
 
-        is_spoken = self.classifier._detect_spoken_word(
-            speech_like, self.sr, energy=0.1, complexity=0.2
-        )
+        is_spoken = self.classifier._detect_spoken_word(speech_like, self.sr, energy=0.1, complexity=0.2)
 
         # Should return boolean
         self.assertIsInstance(is_spoken, bool)
@@ -203,9 +158,7 @@ class TestSectionClassifier(unittest.TestCase):
         # Test with harmonic content (vocal-like)
         harmonic_segment = np.sin(2 * np.pi * 440 * np.linspace(0, 2, self.sr * 2))
 
-        vocal_presence = self.classifier._detect_vocal_presence(
-            harmonic_segment, self.sr
-        )
+        vocal_presence = self.classifier._detect_vocal_presence(harmonic_segment, self.sr)
 
         # Should return boolean
         self.assertIsInstance(vocal_presence, bool)
@@ -215,32 +168,15 @@ class TestSectionClassifier(unittest.TestCase):
         # Test different characteristic combinations
         test_cases = [
             # Low energy, low complexity -> intro/outro
-            {
-                'energy': 0.2,
-                'complexity': 0.2,
-                'brightness': 0.3,
-                'labels': ['low_energy', 'simple'],
-            },
+            {'energy': 0.2, 'spectral_complexity': 0.2, 'spectral_centroid': 1500.0, 'harmonic_content': 0.3},
             # Medium energy, medium complexity -> verse
-            {
-                'energy': 0.5,
-                'complexity': 0.6,
-                'brightness': 0.7,
-                'labels': ['mid_energy', 'complex'],
-            },
+            {'energy': 0.5, 'spectral_complexity': 0.6, 'spectral_centroid': 2000.0, 'harmonic_content': 0.7},
             # High energy, high everything -> chorus
-            {
-                'energy': 0.9,
-                'complexity': 0.8,
-                'brightness': 0.9,
-                'labels': ['high_energy', 'complex', 'bright'],
-            },
+            {'energy': 0.9, 'spectral_complexity': 0.8, 'spectral_centroid': 2500.0, 'harmonic_content': 0.9},
         ]
 
         for i, characteristics in enumerate(test_cases):
-            section_type = self.classifier._classify_section_type(
-                characteristics, i, len(test_cases)
-            )
+            section_type = self.classifier._classify_section_type(characteristics, [], None)
 
             # Check return type
             self.assertIsInstance(section_type, str)
@@ -250,6 +186,7 @@ class TestSectionClassifier(unittest.TestCase):
                 'intro',
                 'verse',
                 'chorus',
+                'pre_chorus',
                 'bridge',
                 'outro',
                 'instrumental',

@@ -42,28 +42,15 @@ class TestSimilarityEngine(unittest.TestCase):
                     {'instrument': 'piano', 'confidence': 0.8, 'prominence': 0.7},
                     {'instrument': 'guitar', 'confidence': 0.6, 'prominence': 0.5},
                 ],
-                'effects_usage': {
-                    'reverb': 0.4,
-                    'distortion': 0.2,
-                    'chorus': 0.3,
-                    'compression': 0.6,
-                },
-                'texture': {
-                    'smoothness': 0.6,
-                    'richness': 0.7,
-                    'clarity': 0.8,
-                    'fullness': 0.5,
-                },
+                'effects_usage': {'reverb': 0.4, 'distortion': 0.2, 'chorus': 0.3, 'compression': 0.6},
+                'texture': {'smoothness': 0.6, 'richness': 0.7, 'clarity': 0.8, 'fullness': 0.5},
             },
             'structure': {
                 'repetition_ratio': 0.6,
                 'structural_complexity': 0.4,
                 'section_count': 5,
                 'unique_sections': 3,
-                'sections': [
-                    {'type': 'intro', 'duration': 8},
-                    {'type': 'verse', 'duration': 16},
-                ],
+                'sections': [{'type': 'intro', 'duration': 8}, {'type': 'verse', 'duration': 16}],
             },
             'melody_harmony': {
                 'melodic_range': {'range_octaves': 2.0, 'pitch_std': 6.0},
@@ -80,11 +67,7 @@ class TestSimilarityEngine(unittest.TestCase):
                     'perfect_fourth': 0.15,
                     'perfect_fifth': 0.1,
                 },
-                'pitch_stability': {
-                    'pitch_stability': 0.8,
-                    'vibrato_rate': 5.0,
-                    'vibrato_extent': 0.1,
-                },
+                'pitch_stability': {'pitch_stability': 0.8, 'vibrato_rate': 5.0, 'vibrato_extent': 0.1},
                 'melody_present': True,
                 'melody_coverage': 0.7,
                 'harmony_complexity': {'harmonic_complexity': 0.6},
@@ -106,10 +89,7 @@ class TestSimilarityEngine(unittest.TestCase):
                     'high_freq_ratio': 0.2,
                     'spectral_balance': 0.6,
                 },
-                'climax_points': [
-                    {'time': 60.0, 'intensity': 0.9},
-                    {'time': 120.0, 'intensity': 0.8},
-                ],
+                'climax_points': [{'time': 60.0, 'intensity': 0.9}, {'time': 120.0, 'intensity': 0.8}],
             },
         }
 
@@ -194,9 +174,7 @@ class TestSimilarityEngine(unittest.TestCase):
             ('track4', np.random.rand(50)),
         ]
 
-        similar_tracks = self.engine.find_similar_tracks(
-            target_vector, database_vectors, top_k=3
-        )
+        similar_tracks = self.engine.find_similar_tracks(target_vector, database_vectors, top_k=3)
 
         # Should return list of tuples
         self.assertIsInstance(similar_tracks, list)
@@ -238,11 +216,7 @@ class TestSimilarityEngine(unittest.TestCase):
     def test_fit_and_normalize_features(self):
         """Test feature scaling."""
         # Create feature vectors
-        vectors = [
-            np.array([1.0, 2.0, 3.0]),
-            np.array([2.0, 4.0, 6.0]),
-            np.array([0.5, 1.0, 1.5]),
-        ]
+        vectors = [np.array([1.0, 2.0, 3.0]), np.array([2.0, 4.0, 6.0]), np.array([0.5, 1.0, 1.5])]
 
         # Fit scaler
         self.engine.fit_scaler(vectors)
@@ -261,9 +235,7 @@ class TestSimilarityEngine(unittest.TestCase):
         # Create high-dimensional feature vectors
         vectors = [np.random.rand(100) for _ in range(10)]
 
-        reduced_vectors, pca_model = self.engine.reduce_dimensionality(
-            vectors, n_components=5
-        )
+        reduced_vectors, pca_model = self.engine.reduce_dimensionality(vectors, n_components=5)
 
         # Should reduce dimensionality
         self.assertEqual(reduced_vectors.shape[0], len(vectors))

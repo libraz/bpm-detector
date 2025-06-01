@@ -1,6 +1,6 @@
 """Section post-processing module for musical structure analysis."""
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
@@ -42,11 +42,11 @@ class SectionProcessor:
     def post_process_sections(
         self,
         raw: List[Dict[str, Any]],
-        total_duration: float = None,
-        merge_threshold: float = None,
+        total_duration: Optional[float] = None,
+        merge_threshold: Optional[float] = None,
         bpm: float = 130.0,
-        y: np.ndarray = None,
-        sr: int = None,
+        y: Optional[np.ndarray] = None,
+        sr: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """Enhanced post-process sections with fade detection and outro refinement.
 
@@ -62,11 +62,7 @@ class SectionProcessor:
             List of processed sections
         """
         # Handle backward compatibility - if total_duration is actually bpm (old signature)
-        if (
-            isinstance(total_duration, (int, float))
-            and merge_threshold is None
-            and len(raw) > 0
-        ):
+        if isinstance(total_duration, (int, float)) and merge_threshold is None and len(raw) > 0:
             # Old signature: post_process_sections(sections, bpm)
             bpm = total_duration
             total_duration = None
@@ -83,9 +79,7 @@ class SectionProcessor:
         else:
             # Calculate 4-bar duration as minimum section length (stricter)
             four_bar_duration = (16 * 60.0) / bpm  # 16 beats = 4 bars
-            min_dur = max(
-                6.0, four_bar_duration
-            )  # Full 4 bars, minimum 6 seconds (stricter)
+            min_dur = max(6.0, four_bar_duration)  # Full 4 bars, minimum 6 seconds (stricter)
 
             # Also calculate 2-bar threshold for very short segments
             two_bar_duration = (8 * 60.0) / bpm  # 8 beats = 2 bars
@@ -110,14 +104,12 @@ class SectionProcessor:
 
         # SECOND: Break consecutive chorus chains and restore instrumentals
         if y is not None and sr is not None:
-            enhanced = self.jpop_optimizer.break_consecutive_chorus_chains(
-                chorus_limited, y, sr, bpm
-            )
+            enhanced = self.jpop_optimizer.break_consecutive_chorus_chains(chorus_limited, y, sr, bpm)
         else:
             enhanced = chorus_limited.copy()
 
         # SECOND: merge adjacent same types (but preserve intentional breaks and instrumental sections)
-        merged = []
+        merged: List[Dict[str, Any]] = []
         for seg in enhanced:
             # Only merge if types are same AND there's no significant gap AND not restored instrumental
             should_merge = False
@@ -125,10 +117,7 @@ class SectionProcessor:
                 # Never merge restored instrumentals (those with vocal_ratio)
                 if seg['type'] == 'instrumental' and seg.get('vocal_ratio') is not None:
                     should_merge = False
-                elif (
-                    merged[-1]['type'] == 'instrumental'
-                    and merged[-1].get('vocal_ratio') is not None
-                ):
+                elif merged[-1]['type'] == 'instrumental' and merged[-1].get('vocal_ratio') is not None:
                     should_merge = False
                 else:
                     # Check for time gap (if gap > 1 second, don't merge)
@@ -139,13 +128,9 @@ class SectionProcessor:
             if should_merge:
                 # Merge sections of same type
                 merged[-1]['end_time'] = seg['end_time']
-                merged[-1]['duration'] = (
-                    merged[-1]['end_time'] - merged[-1]['start_time']
-                )
+                merged[-1]['duration'] = merged[-1]['end_time'] - merged[-1]['start_time']
                 # Update ASCII label to match merged type
-                merged[-1]['ascii_label'] = self.JP_ASCII_LABELS.get(
-                    merged[-1]['type'], merged[-1]['type']
-                )
+                merged[-1]['ascii_label'] = self.JP_ASCII_LABELS.get(merged[-1]['type'], merged[-1]['type'])
             else:
                 merged.append(seg)
 
@@ -160,9 +145,7 @@ class SectionProcessor:
                 if len(enhanced) > 0:
                     # Always merge very short segments into previous
                     enhanced[-1]['end_time'] = seg['end_time']
-                    enhanced[-1]['duration'] = (
-                        enhanced[-1]['end_time'] - enhanced[-1]['start_time']
-                    )
+                    enhanced[-1]['duration'] = enhanced[-1]['end_time'] - enhanced[-1]['start_time']
                     continue
 
             # Enhanced D absorption rule: Always absorb 8 bars after Chorus/Verse/Bridge
@@ -189,9 +172,7 @@ class SectionProcessor:
 
                 if should_absorb:
                     enhanced[-1]['end_time'] = seg['end_time']
-                    enhanced[-1]['duration'] = (
-                        enhanced[-1]['end_time'] - enhanced[-1]['start_time']
-                    )
+                    enhanced[-1]['duration'] = enhanced[-1]['end_time'] - enhanced[-1]['start_time']
                     continue
 
                 # Forward merging for remaining short instrumentals
@@ -200,9 +181,7 @@ class SectionProcessor:
                     if next_seg['type'] in ['chorus', 'verse']:
                         # Extend next section to include this instrumental
                         next_seg['start_time'] = seg['start_time']
-                        next_seg['duration'] = (
-                            next_seg['end_time'] - next_seg['start_time']
-                        )
+                        next_seg['duration'] = next_seg['end_time'] - next_seg['start_time']
                         continue
 
             # Standard short segment absorption (4-bar minimum) - but protect restored instrumentals
@@ -224,14 +203,10 @@ class SectionProcessor:
             if should_absorb:
                 # Absorb short segment into previous section
                 enhanced[-1]['end_time'] = seg['end_time']
-                enhanced[-1]['duration'] = (
-                    enhanced[-1]['end_time'] - enhanced[-1]['start_time']
-                )
+                enhanced[-1]['duration'] = enhanced[-1]['end_time'] - enhanced[-1]['start_time']
 
                 # If absorbing changes the character significantly, update type
-                if (
-                    seg['duration'] > min_dur * 0.3
-                ):  # If absorbed segment is substantial
+                if seg['duration'] > min_dur * 0.3:  # If absorbed segment is substantial
                     # Keep the type of the longer segment
                     if seg['duration'] > enhanced[-1]['duration'] * 0.5:
                         # Absorbed segment is significant, consider hybrid classification
@@ -240,15 +215,10 @@ class SectionProcessor:
 
                         # Apply smart merging rules
                         merged_type = self._smart_merge_types(
-                            prev_type,
-                            curr_type,
-                            enhanced[-1]['duration'],
-                            seg['duration'],
+                            prev_type, curr_type, enhanced[-1]['duration'], seg['duration']
                         )
                         enhanced[-1]['type'] = merged_type
-                        enhanced[-1]['ascii_label'] = self.JP_ASCII_LABELS.get(
-                            merged_type, merged_type
-                        )
+                        enhanced[-1]['ascii_label'] = self.JP_ASCII_LABELS.get(merged_type, merged_type)
             else:
                 enhanced.append(seg)
 
@@ -275,7 +245,7 @@ class SectionProcessor:
         enhanced = self.jpop_optimizer.collapse_alternating_ar_patterns(enhanced)
 
         # === ⑥ oversized pre_chorus split ==============================
-        MAX_R_BARS = 16  # 16 bars(≈32s) を超える R は強制 Verse+R
+        MAX_R_BARS = 16  # Force split to Verse+R for R sections exceeding 16 bars (≈32s)
         max_r_sec = MAX_R_BARS * 4 * 60 / bpm
         fixed = []
         for sec in enhanced:
@@ -316,10 +286,10 @@ class SectionProcessor:
                 last = sec.copy()
                 first["end_time"] = mid
                 first["duration"] = mid - first["start_time"]
-                # 先半分は Verse とする
+                # First half becomes Verse
                 first["type"] = "verse"
                 first["ascii_label"] = self.JP_ASCII_LABELS["verse"]
-                # 後半は Pre-Chorus とする
+                # Second half becomes Pre-Chorus
                 last["start_time"] = mid
                 last["duration"] = sec["end_time"] - mid
                 last["type"] = "pre_chorus"
@@ -330,39 +300,31 @@ class SectionProcessor:
         enhanced = final
 
         # === ⑧ Solo → Instrumental consolidation =================
-        merged2 = []
+        merged2: List[Dict[str, Any]] = []
         for sec in enhanced:
             if sec["type"] == "solo" and sec["duration"] <= 6.0:
                 # normalize
                 sec["type"] = "instrumental"
                 sec["ascii_label"] = self.JP_ASCII_LABELS["instrumental"]
             # merge consecutive instrumentals
-            if (
-                merged2
-                and sec["type"] == "instrumental"
-                and merged2[-1]["type"] == "instrumental"
-            ):
+            if merged2 and sec["type"] == "instrumental" and merged2[-1]["type"] == "instrumental":
                 merged2[-1]["end_time"] = sec["end_time"]
-                merged2[-1]["duration"] = (
-                    merged2[-1]["end_time"] - merged2[-1]["start_time"]
-                )
+                merged2[-1]["duration"] = merged2[-1]["end_time"] - merged2[-1]["start_time"]
             else:
                 merged2.append(sec)
         enhanced = merged2
 
         # === ⑨ too-short Chorus fix (<8bars) =====================
         min_chorus = (8 * 4 * 60) / bpm  # 8 bars
-        patched = []
+        patched: List[Dict[str, Any]] = []
         for i, sec in enumerate(enhanced):
             if sec["type"] == "chorus" and sec["duration"] < min_chorus:
-                # 優先: 直前が R なら吸収
+                # Priority: absorb into previous R section if available
                 if patched and patched[-1]["type"] == "pre_chorus":
                     patched[-1]["end_time"] = sec["end_time"]
-                    patched[-1]["duration"] = (
-                        patched[-1]["end_time"] - patched[-1]["start_time"]
-                    )
+                    patched[-1]["duration"] = patched[-1]["end_time"] - patched[-1]["start_time"]
                     continue
-                # さもなくば Instrumental 扱い
+                # Otherwise treat as Instrumental
                 sec["type"] = "instrumental"
                 sec["ascii_label"] = self.JP_ASCII_LABELS["instrumental"]
             patched.append(sec)
@@ -399,15 +361,11 @@ class SectionProcessor:
 
         # Final pass: Ensure all ASCII labels are consistent
         for section in enhanced:
-            section['ascii_label'] = self.JP_ASCII_LABELS.get(
-                section['type'], section['type']
-            )
+            section['ascii_label'] = self.JP_ASCII_LABELS.get(section['type'], section['type'])
 
         return enhanced
 
-    def _smart_merge_types(
-        self, type1: str, type2: str, dur1: float, dur2: float
-    ) -> str:
+    def _smart_merge_types(self, type1: str, type2: str, dur1: float, dur2: float) -> str:
         """Smart merging of section types based on musical logic.
 
         Args:
@@ -439,14 +397,8 @@ class SectionProcessor:
             ('pre_chorus', 'verse'): 'verse',
             ('pre_chorus', 'chorus'): 'chorus',  # Pre-chorus leads to chorus
             ('chorus', 'pre_chorus'): 'chorus',
-            (
-                'chorus',
-                'instrumental',
-            ): 'chorus',  # Short instrumental after chorus -> chorus
-            (
-                'instrumental',
-                'chorus',
-            ): 'chorus',  # Short instrumental before chorus -> chorus
+            ('chorus', 'instrumental'): 'chorus',  # Short instrumental after chorus -> chorus
+            ('instrumental', 'chorus'): 'chorus',  # Short instrumental before chorus -> chorus
             ('verse', 'bridge'): 'bridge',  # Bridge is more distinctive
             ('bridge', 'verse'): 'bridge',
             ('instrumental', 'break'): 'instrumental',
@@ -463,9 +415,7 @@ class SectionProcessor:
         # Default: prefer the first type
         return type1
 
-    def _merge_chorus_instrumental_chorus(
-        self, sections: List[Dict[str, Any]], bpm: float
-    ) -> List[Dict[str, Any]]:
+    def _merge_chorus_instrumental_chorus(self, sections: List[Dict[str, Any]], bpm: float) -> List[Dict[str, Any]]:
         """
         Collapse patterns like B(8bars)-D(≤8bars)-B(8bars)
         into a single extended Chorus with maximum length limit.
@@ -506,12 +456,8 @@ class SectionProcessor:
                         continue
 
                     # Check merged length
-                    merged_duration = (
-                        sections[i + 2]['end_time'] - sections[i]['start_time']
-                    )
-                    max_allowed_duration = (
-                        MAX_BARS * eight_bar / 8
-                    )  # 16 bars equivalent time
+                    merged_duration = sections[i + 2]['end_time'] - sections[i]['start_time']
+                    max_allowed_duration = MAX_BARS * eight_bar / 8  # 16 bars equivalent time
 
                     if merged_duration <= max_allowed_duration:
                         # Execute merging within length limit
@@ -519,9 +465,7 @@ class SectionProcessor:
                         new_sec['end_time'] = sections[i + 2]['end_time']
                         new_sec['duration'] = merged_duration
                         # Always reset ASCII label after merge to prevent notation inconsistency
-                        new_sec['ascii_label'] = self.JP_ASCII_LABELS.get(
-                            new_sec['type'], new_sec['type']
-                        )
+                        new_sec['ascii_label'] = self.JP_ASCII_LABELS.get(new_sec['type'], new_sec['type'])
                         out.append(new_sec)
                         i += 3
                         changed = True  # Loop again
@@ -535,9 +479,7 @@ class SectionProcessor:
             sections = out
         return sections
 
-    def _downgrade_short_bridges(
-        self, sections: List[Dict[str, Any]], bpm: float
-    ) -> List[Dict[str, Any]]:
+    def _downgrade_short_bridges(self, sections: List[Dict[str, Any]], bpm: float) -> List[Dict[str, Any]]:
         """Downgrade short bridges (< 12 bars) to verse sections.
 
         Args:
@@ -551,17 +493,13 @@ class SectionProcessor:
             return sections
 
         # Calculate 12-bar duration threshold
-        twelve_bar_duration = (
-            12 * 4 * 60.0
-        ) / bpm  # 12 bars * 4 beats/bar * 60s/min / bpm
+        twelve_bar_duration = (12 * 4 * 60.0) / bpm  # 12 bars * 4 beats/bar * 60s/min / bpm
 
         processed = sections.copy()
 
         for i, section in enumerate(processed):
             if section['type'] == 'bridge':
-                duration = section.get(
-                    'duration', section['end_time'] - section['start_time']
-                )
+                duration = section.get('duration', section['end_time'] - section['start_time'])
                 complexity = section.get('complexity', 0.0)
                 energy_level = section.get('energy_level', 0.0)
 
@@ -572,20 +510,14 @@ class SectionProcessor:
                     # Downgrade based on energy level
                     if energy_level > 0.55:
                         processed[i]['type'] = 'pre_chorus'
-                        processed[i]['ascii_label'] = self.JP_ASCII_LABELS.get(
-                            'pre_chorus', 'pre_chorus'
-                        )
+                        processed[i]['ascii_label'] = self.JP_ASCII_LABELS.get('pre_chorus', 'pre_chorus')
                     else:
                         processed[i]['type'] = 'verse'
-                        processed[i]['ascii_label'] = self.JP_ASCII_LABELS.get(
-                            'verse', 'verse'
-                        )
+                        processed[i]['ascii_label'] = self.JP_ASCII_LABELS.get('verse', 'verse')
 
         return processed
 
-    def _cleanup_ending_instrumentals(
-        self, sections: List[Dict[str, Any]], bpm: float = 130.0
-    ) -> List[Dict[str, Any]]:
+    def _cleanup_ending_instrumentals(self, sections: List[Dict[str, Any]], bpm: float = 130.0) -> List[Dict[str, Any]]:
         """Clean up short instrumental sections at the end of the track.
 
         Args:
@@ -620,9 +552,7 @@ class SectionProcessor:
         self, y: np.ndarray, sr: int, sections: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """Refine section labels using spectral flux analysis."""
-        return self.analyzer.refine_section_labels_with_spectral_analysis(
-            y, sr, sections
-        )
+        return self.analyzer.refine_section_labels_with_spectral_analysis(y, sr, sections)
 
     def analyze_form(self, sections: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Analyze overall musical form."""
@@ -646,26 +576,20 @@ class SectionProcessor:
         return self.analyzer._calculate_structural_complexity(sections)
 
     def _classify_instrumental_subtype(
-        self, section: Dict[str, Any], spectral_features: Dict[str, Any] = None
+        self, section: Dict[str, Any], spectral_features: Optional[Dict[str, Any]] = None
     ) -> str:
         """Classify instrumental sections into more specific subtypes."""
         return self.analyzer.classify_instrumental_subtype(section, spectral_features)
 
-    def _suppress_consecutive_pre_chorus(
-        self, sections: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    def _suppress_consecutive_pre_chorus(self, sections: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Suppress consecutive pre-chorus sections to prevent over-segmentation."""
         return self.jpop_optimizer.suppress_consecutive_pre_chorus(sections)
 
-    def _enforce_pre_chorus_chorus_pairing(
-        self, sections: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    def _enforce_pre_chorus_chorus_pairing(self, sections: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Enforce Pre-Chorus → Chorus pairing rules for J-Pop structure."""
         return self.jpop_optimizer.enforce_pre_chorus_chorus_pairing(sections)
 
-    def _collapse_alternating_ar_patterns(
-        self, sections: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    def _collapse_alternating_ar_patterns(self, sections: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Collapse A-R alternating patterns to A-R-B structure."""
         return self.jpop_optimizer.collapse_alternating_ar_patterns(sections)
 
@@ -675,8 +599,6 @@ class SectionProcessor:
         """Break up consecutive chorus chains and restore instrumentals."""
         return self.jpop_optimizer.break_consecutive_chorus_chains(sections, y, sr, bpm)
 
-    def _detect_vocal_presence(
-        self, y: np.ndarray, sr: int, start_time: float, end_time: float
-    ) -> float:
+    def _detect_vocal_presence(self, y: np.ndarray, sr: int, start_time: float, end_time: float) -> float:
         """Detect vocal presence ratio in a given time segment."""
         return self.jpop_optimizer._detect_vocal_presence(y, sr, start_time, end_time)

@@ -1,17 +1,15 @@
 """BPM and Key detection algorithms."""
 
-import math
 import warnings
 from typing import Any, Dict, List, Tuple
 
 import librosa
 import numpy as np
-import soundfile as sf
-from tqdm import tqdm
 
 # Import new analyzers
 from .chord_analyzer import ChordProgressionAnalyzer
 from .dynamics_analyzer import DynamicsAnalyzer
+from .key_detector import KeyDetector as NewKeyDetector
 from .melody_harmony_analyzer import MelodyHarmonyAnalyzer
 from .rhythm_analyzer import RhythmAnalyzer
 from .similarity_engine import SimilarityEngine
@@ -26,17 +24,7 @@ RATIOS = [0.5, 2 / 3, 0.75, 1.0, 4 / 3, 1.5, 2.0, 3.0, 4.0]
 TOL = 0.05
 THRESH_HIGHER = 0.15  # 15% of total votes
 
-# --- Key detection constants ---
-# Krumhansl-Schmuckler key profiles
-MAJOR_PROFILE = np.array(
-    [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88]
-)
-MINOR_PROFILE = np.array(
-    [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17]
-)
-
-# Note names for display
-NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+# Note: Key detection constants moved to key_detector.py and key_profiles.py
 
 
 class BPMDetector:
@@ -46,9 +34,7 @@ class BPMDetector:
         self.sr = sr
         self.hop_length = hop_length
 
-    def harmonic_cluster(
-        self, bpms: np.ndarray, votes: np.ndarray
-    ) -> Dict[float, List[Tuple[float, int]]]:
+    def harmonic_cluster(self, bpms: np.ndarray, votes: np.ndarray) -> Dict[float, List[Tuple[float, int]]]:
         """Group BPM candidates into harmonic clusters."""
         clusters: Dict[float, List[Tuple[float, int]]] = {}
         for bpm, hit in sorted(zip(bpms, votes), key=lambda x: -x[1]):
@@ -61,19 +47,13 @@ class BPMDetector:
                 clusters[bpm] = [(bpm, hit)]
         return clusters
 
-    def smart_choice(
-        self, clusters: Dict[float, List[Tuple[float, int]]], total_votes: int
-    ) -> Tuple[float, float]:
+    def smart_choice(self, clusters: Dict[float, List[Tuple[float, int]]], total_votes: int) -> Tuple[float, float]:
         """Choose the best BPM from clusters using smart selection."""
         # base cluster = largest votes
         base, base_vals = max(clusters.items(), key=lambda kv: sum(v for _, v in kv[1]))
         base_votes = sum(v for _, v in base_vals)
 
-        higher = [
-            (rep, sum(v for _, v in vals))
-            for rep, vals in clusters.items()
-            if rep > base
-        ]
+        higher = [(rep, sum(v for _, v in vals)) for rep, vals in clusters.items() if rep > base]
         higher.sort(key=lambda x: -x[1])
 
         if higher and higher[0][1] / total_votes >= THRESH_HIGHER:
@@ -86,12 +66,7 @@ class BPMDetector:
         return rep_bpm, conf
 
     def detect(
-        self,
-        y: np.ndarray,
-        sr: int,
-        min_bpm: float = 40.0,
-        max_bpm: float = 300.0,
-        start_bpm: float = 150.0,
+        self, y: np.ndarray, sr: int, min_bpm: float = 40.0, max_bpm: float = 300.0, start_bpm: float = 150.0
     ) -> Tuple[float, float, np.ndarray, np.ndarray]:
         """Detect BPM from audio signal with optimized processing."""
         # Choose API without FutureWarning
@@ -102,9 +77,7 @@ class BPMDetector:
         ):
             tempo_func = librosa.feature.rhythm.tempo
         else:
-            warnings.filterwarnings(
-                "ignore", category=FutureWarning, message=".*librosa.beat.tempo.*"
-            )
+            warnings.filterwarnings("ignore", category=FutureWarning, message=".*librosa.beat.tempo.*")
             tempo_func = librosa.beat.tempo
 
         # Optimize for speed: use smaller hop_length for faster processing
@@ -121,12 +94,7 @@ class BPMDetector:
             y_trimmed = y
 
         cands = tempo_func(
-            y=y_trimmed,
-            sr=sr,
-            aggregate=None,
-            hop_length=optimized_hop,
-            max_tempo=max_bpm,
-            start_bpm=start_bpm,
+            y=y_trimmed, sr=sr, aggregate=None, hop_length=optimized_hop, max_tempo=max_bpm, start_bpm=start_bpm
         )
 
         bins = np.arange(min_bpm, max_bpm + BIN_WIDTH, BIN_WIDTH)
@@ -141,72 +109,9 @@ class BPMDetector:
         return rep_bpm, conf, top_bpms, top_hits
 
 
-class KeyDetector:
-    """Musical key detection using chroma features and key profiles."""
-
-    def __init__(self, hop_length: int = HOP_DEFAULT):
-        self.hop_length = hop_length
-
-    def detect(self, y: np.ndarray, sr: int) -> Tuple[str, float]:
-        """Detect musical key from audio signal with optimized processing.
-
-        Args:
-            y: Audio signal
-            sr: Sample rate
-
-        Returns:
-            tuple: (Key name, Confidence)
-        """
-        # Optimize for speed: limit audio length and use efficient parameters
-        max_duration = 120  # 2 minutes max for key detection
-        if len(y) > max_duration * sr:
-            # Use middle section for better key representation
-            start_idx = len(y) // 4
-            end_idx = start_idx + (max_duration * sr)
-            y_trimmed = y[start_idx:end_idx]
-        else:
-            y_trimmed = y
-
-        # Calculate chroma features with optimized parameters
-        chroma = librosa.feature.chroma_stft(
-            y=y_trimmed,
-            sr=sr,
-            hop_length=self.hop_length,
-            n_fft=2048,  # Smaller FFT for speed
-            n_chroma=12,
-        )
-
-        # Take average over time axis
-        chroma_mean = np.mean(chroma, axis=1)
-
-        # Pre-compute rotated profiles for efficiency
-        major_profiles = [np.roll(MAJOR_PROFILE, i) for i in range(12)]
-        minor_profiles = [np.roll(MINOR_PROFILE, i) for i in range(12)]
-
-        # Calculate correlations more efficiently
-        correlations = []
-
-        # Vectorized correlation calculation for major keys
-        for i, profile in enumerate(major_profiles):
-            correlation = np.corrcoef(chroma_mean, profile)[0, 1]
-            if not np.isnan(correlation):  # Handle NaN values
-                correlations.append((NOTE_NAMES[i] + " Major", correlation))
-
-        # Vectorized correlation calculation for minor keys
-        for i, profile in enumerate(minor_profiles):
-            correlation = np.corrcoef(chroma_mean, profile)[0, 1]
-            if not np.isnan(correlation):  # Handle NaN values
-                correlations.append((NOTE_NAMES[i] + " Minor", correlation))
-
-        # Select key with highest correlation
-        if correlations:
-            best_key, best_correlation = max(correlations, key=lambda x: x[1])
-            confidence = max(0, best_correlation * 100)  # Clip negative values to 0
-        else:
-            # Fallback if no valid correlations
-            best_key, confidence = "C Major", 0.0
-
-        return best_key, confidence
+# Legacy KeyDetector class removed - using new KeyDetector from key_detector.py
+# Export KeyDetector for backward compatibility
+KeyDetector = NewKeyDetector
 
 
 class AudioAnalyzer:
@@ -218,7 +123,7 @@ class AudioAnalyzer:
 
         # Original detectors
         self.bpm_detector = BPMDetector(sr, hop_length)
-        self.key_detector = KeyDetector(hop_length)
+        self.key_detector = NewKeyDetector(hop_length)
 
         # New analyzers
         self.chord_analyzer = ChordProgressionAnalyzer(hop_length)
@@ -230,7 +135,7 @@ class AudioAnalyzer:
         self.similarity_engine = SimilarityEngine()
 
         # Feature cache for efficiency
-        self._feature_cache = {}
+        self._feature_cache: Dict[str, Any] = {}
         self._cache_enabled = True
 
     def clear_cache(self):
@@ -293,9 +198,7 @@ class AudioAnalyzer:
         duration = len(y) / sr
 
         # BPM detection
-        bpm, bpm_conf, top_bpms, top_hits = self.bpm_detector.detect(
-            y, sr, min_bpm, max_bpm, start_bpm
-        )
+        bpm, bpm_conf, top_bpms, top_hits = self.bpm_detector.detect(y, sr, min_bpm, max_bpm, start_bpm)
         update_progress()
 
         # Key detection (using improved method from melody_harmony_analyzer)
@@ -303,16 +206,17 @@ class AudioAnalyzer:
         key_conf = 0.0
         key_detection_result = None
         if detect_key:
-            # Use the improved key detection from melody_harmony_analyzer with C minor hint
-            key_detection_result = self.melody_harmony_analyzer.detect_key(
-                y, sr, external_key_hint="Cm"
-            )
-            if key_detection_result['key'] != 'None':
+            # Use the improved key detection from new KeyDetector
+            key_detection_result = self.key_detector.detect_key(y, sr)
+            # Check for valid key detection (not Unknown format)
+            if not key_detection_result['key'].startswith('Unknown'):
                 key = f"{key_detection_result['key']} {key_detection_result['mode']}"
-                key_conf = key_detection_result['confidence'] * 100
+                key_conf = key_detection_result['confidence']  # Already 0-100 scale
             else:
-                # Fallback to original method
-                key, key_conf = self.key_detector.detect(y, sr)
+                # Fallback to melody_harmony_analyzer
+                fallback_result = self.melody_harmony_analyzer.detect_key(y, sr)
+                key = f"{fallback_result['key']} {fallback_result['mode']}"
+                key_conf = fallback_result['confidence']
         update_progress()
 
         # Basic results
@@ -339,7 +243,7 @@ class AudioAnalyzer:
         # Comprehensive analysis
         try:
             # Chord progression analysis
-            chord_analysis = self.chord_analyzer.analyze(y, sr, key)
+            chord_analysis = self.chord_analyzer.analyze(y, sr, key or "C Major")
             results["chord_progression"] = chord_analysis
             update_progress()
 
@@ -376,10 +280,12 @@ class AudioAnalyzer:
             }
 
             # Generate reference tags
-            results["reference_tags"] = self._generate_reference_tags(results)
+            reference_tags = self._generate_reference_tags(results)
+            results["reference_tags"] = reference_tags  # type: ignore
 
             # Generate production notes
-            results["production_notes"] = self._generate_production_notes(results)
+            production_notes = self._generate_production_notes(results)
+            results["production_notes"] = production_notes
 
             update_progress()
 
@@ -530,7 +436,7 @@ class AudioAnalyzer:
         elif brightness < 0.3:
             mix_chars.append("warm_mix")
 
-        notes["mix_characteristics"] = mix_chars
+        notes["mix_characteristics"] = mix_chars  # type: ignore
 
         return notes
 

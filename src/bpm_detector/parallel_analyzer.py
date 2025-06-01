@@ -1,16 +1,11 @@
 """Parallel audio analyzer with progress tracking and auto-optimization."""
 
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
 
-from .auto_parallel import (
-    AutoParallelConfig,
-    ParallelConfig,
-    PerformanceProfiler,
-    SystemMonitor,
-)
+from .auto_parallel import AutoParallelConfig, ParallelConfig, PerformanceProfiler, SystemMonitor
 from .music_analyzer import AudioAnalyzer
 from .progress_manager import ProgressCallback, ProgressManager
 
@@ -18,9 +13,7 @@ from .progress_manager import ProgressCallback, ProgressManager
 class SmartParallelAudioAnalyzer(AudioAnalyzer):
     """Smart parallel audio analyzer with automatic optimization."""
 
-    def __init__(
-        self, auto_parallel: bool = True, max_workers: Optional[int] = None, **kwargs
-    ):
+    def __init__(self, auto_parallel: bool = True, max_workers: Optional[int] = None, **kwargs):
         super().__init__(**kwargs)
         self.auto_parallel = auto_parallel
         self.system_monitor = SystemMonitor()
@@ -38,9 +31,7 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
         # Override with manual setting if provided
         if self._manual_max_workers:
             self._parallel_config.max_workers = self._manual_max_workers
-            self._parallel_config.reason += (
-                f" (manual override: {self._manual_max_workers} workers)"
-            )
+            self._parallel_config.reason += f" (manual override: {self._manual_max_workers} workers)"
 
         if self._parallel_config.enable_parallel:
             # Calculate physical memory info
@@ -53,7 +44,8 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
             print(f"🚀 Auto-parallel enabled: {self._parallel_config.reason}")
             print(f"   Workers: {self._parallel_config.max_workers}")
             print(
-                f"   Memory limit: {self._parallel_config.memory_limit_mb}MB ({memory_limit_gb:.1f}GB, {memory_percentage:.0f}% of {total_memory_gb:.1f}GB physical)"
+                f"   Memory limit: {self._parallel_config.memory_limit_mb}MB "
+                f"({memory_limit_gb:.1f}GB, {memory_percentage:.0f}% of {total_memory_gb:.1f}GB physical)"
             )
             print(f"   Strategy: {self._parallel_config.strategy.value}")
 
@@ -64,62 +56,53 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
 
     def analyze_file(
         self,
-        path: Union[str, List[str]],
+        path: str,
+        detect_key: bool = True,
+        comprehensive: bool = True,
+        min_bpm: float = 40.0,
+        max_bpm: float = 300.0,
+        start_bpm: float = 150.0,
+        progress_callback=None,
+    ) -> Dict[str, Any]:
+        """Analyze audio file with smart parallelization."""
+        return self._analyze_single_file(
+            path, detect_key, comprehensive, min_bpm, max_bpm, start_bpm, progress_callback
+        )
+
+    def analyze_files(
+        self,
+        paths: List[str],
         comprehensive: bool = True,
         progress_callback: Optional[Callable] = None,
         progress_display=None,
         detailed_progress: bool = False,
         **kwargs,
-    ) -> Union[Dict[str, Any], Dict[str, Dict[str, Any]]]:
-        """Analyze audio file(s) with smart parallelization."""
-
-        if isinstance(path, (list, tuple)):
-            return self._analyze_multiple_files(
-                path,
-                comprehensive,
-                progress_callback,
-                progress_display,
-                detailed_progress,
-                **kwargs,
-            )
-        else:
-            return self._analyze_single_file(
-                path,
-                comprehensive,
-                progress_callback,
-                progress_display,
-                detailed_progress,
-                **kwargs,
-            )
+    ) -> Dict[str, Dict[str, Any]]:
+        """Analyze multiple audio files with smart parallelization."""
+        return self._analyze_multiple_files(
+            paths, comprehensive, progress_callback, progress_display, detailed_progress, **kwargs
+        )
 
     def _analyze_single_file(
         self,
         path: str,
+        detect_key: bool = True,
         comprehensive: bool = True,
-        progress_callback: Optional[Callable] = None,
-        progress_display=None,
-        detailed_progress: bool = False,
-        **kwargs,
+        min_bpm: float = 40.0,
+        max_bpm: float = 300.0,
+        start_bpm: float = 150.0,
+        progress_callback=None,
     ) -> Dict[str, Any]:
         """Analyze single file with parallel processing."""
 
         if not comprehensive or not self._should_use_parallel():
-            return super().analyze_file(path, **kwargs)
+            return super().analyze_file(path, detect_key, comprehensive, min_bpm, max_bpm, start_bpm, progress_callback)
 
         # Setup progress management
         progress_manager = ProgressManager()
 
-        # Setup progress display or callback with safety measures
-        if progress_display:
-            # Use progress display for detailed multi-bar progress with safety
-            def safe_display_callback(pm):
-                try:
-                    progress_display.update(pm)
-                except Exception as e:
-                    print(f"Progress display error: {e}")
-
-            progress_manager.add_callback(safe_display_callback)
-        elif progress_callback:
+        # Setup progress callback with safety measures
+        if progress_callback:
             # Use simple callback for basic progress
             def safe_progress_callback(pm):
                 try:
@@ -129,11 +112,7 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
                         message = f"Running: {', '.join(running_tasks[:2])}"
                     else:
                         with pm._lock:
-                            completed = sum(
-                                1
-                                for t in pm._tasks.values()
-                                if t.status.value == "completed"
-                            )
+                            completed = sum(1 for t in pm._tasks.values() if t.status.value == "completed")
                             total = len(pm._tasks)
                             message = f"Completed: {completed}/{total} tasks"
                     progress_callback(overall_progress, message)
@@ -164,7 +143,14 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
 
             # Parallel comprehensive analysis
             results = self._parallel_comprehensive_analysis(
-                y, sr, path, progress_manager, **kwargs
+                y,
+                sr,
+                path,
+                progress_manager,
+                detect_key=detect_key,
+                min_bpm=min_bpm,
+                max_bpm=max_bpm,
+                start_bpm=start_bpm,
             )
 
             # Clear audio data from memory early
@@ -198,9 +184,7 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
 
         # Adjust configuration for multiple files
         if self._parallel_config:
-            adjusted_config = AutoParallelConfig.get_file_count_adjustment(
-                len(paths), self._parallel_config
-            )
+            adjusted_config = AutoParallelConfig.get_file_count_adjustment(len(paths), self._parallel_config)
         else:
             adjusted_config = AutoParallelConfig.get_optimal_config()
 
@@ -209,10 +193,7 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
             results = {}
             for i, path in enumerate(paths):
                 if progress_callback:
-                    progress_callback(
-                        int(100 * i / len(paths)),
-                        f"Processing {path} ({i+1}/{len(paths)})",
-                    )
+                    progress_callback(int(100 * i / len(paths)), f"Processing {path} ({i+1}/{len(paths)})")
                 results[path] = self.analyze_file(path, **kwargs)
 
             if progress_callback:
@@ -220,12 +201,18 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
             return results
 
         # Parallel processing
-        return self._parallel_analyze_multiple_files(
-            paths, comprehensive, adjusted_config, progress_callback, **kwargs
-        )
+        return self._parallel_analyze_multiple_files(paths, comprehensive, adjusted_config, progress_callback, **kwargs)
 
     def _parallel_comprehensive_analysis(
-        self, y, sr, path: str, progress_manager: ProgressManager, **kwargs
+        self,
+        y,
+        sr,
+        path: str,
+        progress_manager: ProgressManager,
+        detect_key: bool = True,
+        min_bpm: float = 40.0,
+        max_bpm: float = 300.0,
+        start_bpm: float = 150.0,
     ) -> Dict[str, Any]:
         """Perform parallel comprehensive analysis."""
 
@@ -246,7 +233,7 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
         # Basic analysis first (needed by other analyzers)
         basic_callback = ProgressCallback(progress_manager, 'basic_info')
         basic_info = self._analyze_basic_info_with_progress(
-            y, sr, path, basic_callback, **kwargs
+            y, sr, path, basic_callback, detect_key=detect_key, min_bpm=min_bpm, max_bpm=max_bpm, start_bpm=start_bpm
         )
         basic_callback.complete()
 
@@ -254,9 +241,7 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
         max_workers = self._get_current_max_workers()
 
         # Use more aggressive parallelization for better performance
-        effective_workers = min(
-            max_workers * 3, 24
-        )  # Triple the workers for analysis tasks
+        effective_workers = min(max_workers * 3, 24)  # Triple the workers for analysis tasks
 
         # Parallel analysis execution
         with ThreadPoolExecutor(max_workers=effective_workers) as executor:
@@ -281,20 +266,10 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
                     float(basic_info.get('bpm', 130.0)),
                 ),
                 'rhythm': executor.submit(
-                    self._analyze_with_progress,
-                    'rhythm',
-                    progress_manager,
-                    self.rhythm_analyzer.analyze,
-                    y,
-                    sr,
+                    self._analyze_with_progress, 'rhythm', progress_manager, self.rhythm_analyzer.analyze, y, sr
                 ),
                 'timbre': executor.submit(
-                    self._analyze_with_progress,
-                    'timbre',
-                    progress_manager,
-                    self.timbre_analyzer.analyze,
-                    y,
-                    sr,
+                    self._analyze_with_progress, 'timbre', progress_manager, self.timbre_analyzer.analyze, y, sr
                 ),
                 'melody_harmony': executor.submit(
                     self._analyze_with_progress,
@@ -305,12 +280,7 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
                     sr,
                 ),
                 'dynamics': executor.submit(
-                    self._analyze_with_progress,
-                    'dynamics',
-                    progress_manager,
-                    self.dynamics_analyzer.analyze,
-                    y,
-                    sr,
+                    self._analyze_with_progress, 'dynamics', progress_manager, self.dynamics_analyzer.analyze, y, sr
                 ),
             }
 
@@ -357,9 +327,7 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
             # Process parallelization for multiple files
             with ProcessPoolExecutor(max_workers=max_workers) as executor:
                 futures = {
-                    path: executor.submit(
-                        self._analyze_single_file_worker, path, comprehensive, **kwargs
-                    )
+                    path: executor.submit(self._analyze_single_file_worker, path, comprehensive, **kwargs)
                     for path in paths
                 }
 
@@ -373,8 +341,7 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
 
                         if progress_callback:
                             progress_callback(
-                                int(100 * completed / len(paths)),
-                                f"Completed {completed}/{len(paths)} files",
+                                int(100 * completed / len(paths)), f"Completed {completed}/{len(paths)} files"
                             )
                     except Exception as e:
                         results[path] = {'error': str(e)}
@@ -384,10 +351,7 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
         else:
             # Thread parallelization
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = {
-                    path: executor.submit(self.analyze_file, path, **kwargs)
-                    for path in paths
-                }
+                futures = {path: executor.submit(self.analyze_file, path, **kwargs) for path in paths}
 
                 results = {}
                 completed = 0
@@ -399,8 +363,7 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
 
                         if progress_callback:
                             progress_callback(
-                                int(100 * completed / len(paths)),
-                                f"Completed {completed}/{len(paths)} files",
+                                int(100 * completed / len(paths)), f"Completed {completed}/{len(paths)} files"
                             )
                     except Exception as e:
                         results[path] = {'error': str(e)}
@@ -409,12 +372,7 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
                 return results
 
     def _analyze_with_progress(
-        self,
-        task_id: str,
-        progress_manager: ProgressManager,
-        analyzer_func: Callable,
-        *args,
-        **kwargs,
+        self, task_id: str, progress_manager: ProgressManager, analyzer_func: Callable, *args, **kwargs
     ):
         """Execute analysis with progress tracking."""
         callback = ProgressCallback(progress_manager, task_id)
@@ -444,9 +402,7 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
 
                     sig = inspect.signature(analyzer_func)
                     if 'progress_callback' in sig.parameters:
-                        result = analyzer_func(
-                            *args, progress_callback=callback, **kwargs
-                        )
+                        result = analyzer_func(*args, progress_callback=callback, **kwargs)
                     else:
                         result = analyzer_func(*args, **kwargs)
                         callback(75, "Processing completed...")
@@ -466,7 +422,17 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
             self.performance_profiler.end_profiling(profile_data)
             raise
 
-    def _analyze_basic_info_with_progress(self, y, sr, path, callback, **kwargs):
+    def _analyze_basic_info_with_progress(
+        self,
+        y,
+        sr,
+        path,
+        callback,
+        detect_key: bool = True,
+        min_bpm: float = 40.0,
+        max_bpm: float = 300.0,
+        start_bpm: float = 150.0,
+    ):
         """Basic analysis with progress tracking."""
         callback(5, "Starting basic analysis...")
 
@@ -474,21 +440,26 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
         duration = len(y) / sr
         callback(15, "Analyzing BPM...")
 
-        bpm, bpm_conf, top_bpms, top_hits = self.bpm_detector.detect(
-            y,
-            sr,
-            kwargs.get('min_bpm', 40.0),
-            kwargs.get('max_bpm', 300.0),
-            kwargs.get('start_bpm', 150.0),
-        )
+        bpm, bpm_conf, top_bpms, top_hits = self.bpm_detector.detect(y, sr, min_bpm, max_bpm, start_bpm)
         callback(50, "BPM analysis completed")
 
         callback(60, "Detecting key...")
 
         key = None
         key_conf = 0.0
-        if kwargs.get('detect_key', True):
-            key, key_conf = self.key_detector.detect(y, sr)
+        key_detection_result = None
+        if detect_key:
+            # Use the improved key detection from new KeyDetector
+            key_detection_result = self.key_detector.detect_key(y, sr)
+            # Check for valid key detection (not Unknown format)
+            if not key_detection_result['key'].startswith('Unknown'):
+                key = f"{key_detection_result['key']} {key_detection_result['mode']}"
+                key_conf = key_detection_result['confidence']  # Already 0-100 scale
+            else:
+                # Fallback to melody_harmony_analyzer
+                fallback_result = self.melody_harmony_analyzer.detect_key(y, sr)
+                key = f"{fallback_result['key']} {fallback_result['mode']}"
+                key_conf = fallback_result['confidence']
             callback(90, "Key detection completed")
         else:
             callback(90, "Key detection skipped")
@@ -514,9 +485,7 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
         callback(25, "Features extracted")
 
         callback(30, "Computing similarity matrix...")
-        similarity_matrix = self.structure_analyzer.compute_self_similarity_matrix(
-            features
-        )
+        similarity_matrix = self.structure_analyzer.compute_self_similarity_matrix(features)
         callback(50, "Similarity matrix computed")
 
         callback(60, "Detecting boundaries...")
@@ -574,11 +543,9 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
                     # Get the most common chord progression for this section
                     if segment_chords:
                         # Take the most frequent chords (simplified)
-                        unique_chords = list(set(segment_chords))[
-                            :4
-                        ]  # Max 4 chords per section
+                        unique_chords = list(set(segment_chords))[:4]  # Max 4 chords per section
                         section_progression = (
-                            ' → '.join(unique_chords) if unique_chords else 'Unknown'
+                            ' → '.join(str(chord) for chord in unique_chords) if unique_chords else 'Unknown'
                         )
                     else:
                         section_progression = 'Unknown'
@@ -620,11 +587,7 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
 
     def _should_use_parallel(self) -> bool:
         """Check if parallel processing should be used."""
-        if (
-            not self.auto_parallel
-            or not self._parallel_config
-            or not self._parallel_config.enable_parallel
-        ):
+        if not self.auto_parallel or not self._parallel_config or not self._parallel_config.enable_parallel:
             return False
 
         # Dynamic load check
@@ -659,7 +622,7 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
         """Worker function for process-based parallelization."""
         # Create new analyzer instance for process isolation
         analyzer = AudioAnalyzer(sr=self.sr, hop_length=self.hop_length)
-        return analyzer.analyze_file(path, **kwargs)
+        return analyzer.analyze_file(path, comprehensive=comprehensive, **kwargs)
 
     def get_performance_summary(self) -> Dict[str, Any]:
         """Get performance profiling summary."""

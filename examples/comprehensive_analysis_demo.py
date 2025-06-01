@@ -2,6 +2,7 @@
 
 import os
 import sys
+
 import numpy as np
 
 # Add the src directory to the path so we can import bpm_detector
@@ -105,9 +106,7 @@ def demonstrate_comprehensive_analysis():
         main_prog = chord_prog.get('main_progression', [])
         if main_prog:
             print(f"   Main progression: {' → '.join(main_prog)}")
-        print(
-            f"   Harmonic rhythm: {chord_prog.get('harmonic_rhythm', 0):.2f} changes/sec"
-        )
+        print(f"   Harmonic rhythm: {chord_prog.get('harmonic_rhythm', 0):.2f} changes/sec")
         print(f"   Chord complexity: {chord_prog.get('chord_complexity', 0):.1%}")
         print(f"   Unique chords: {chord_prog.get('unique_chords', 0)}\n")
 
@@ -117,9 +116,7 @@ def demonstrate_comprehensive_analysis():
         print(f"   Form: {structure.get('form', 'Unknown')}")
         print(f"   Sections: {structure.get('section_count', 0)}")
         print(f"   Repetition ratio: {structure.get('repetition_ratio', 0):.1%}")
-        print(
-            f"   Structural complexity: {structure.get('structural_complexity', 0):.1%}"
-        )
+        print(f"   Structural complexity: {structure.get('structural_complexity', 0):.1%}")
 
         sections = structure.get('sections', [])
         if sections:
@@ -154,10 +151,7 @@ def demonstrate_comprehensive_analysis():
         if instruments:
             print("   Detected instruments:")
             for inst in instruments[:3]:
-                print(
-                    f"     {inst.get('instrument', 'unknown')}: "
-                    f"{inst.get('confidence', 0):.1%} confidence"
-                )
+                print(f"     {inst.get('instrument', 'unknown')}: " f"{inst.get('confidence', 0):.1%} confidence")
         print()
 
         # Melody & Harmony
@@ -171,9 +165,7 @@ def demonstrate_comprehensive_analysis():
         print(f"   Consonance level: {consonance.get('consonance_level', 0):.1%}")
 
         harmony_complexity = melody_harmony.get('harmony_complexity', {})
-        print(
-            f"   Harmonic complexity: {harmony_complexity.get('harmonic_complexity', 0):.1%}"
-        )
+        print(f"   Harmonic complexity: {harmony_complexity.get('harmonic_complexity', 0):.1%}")
         print(f"   Melody present: {melody_harmony.get('melody_present', False)}\n")
 
         # Dynamics
@@ -191,10 +183,7 @@ def demonstrate_comprehensive_analysis():
         if climax_points:
             print(f"   Climax points: {len(climax_points)}")
             for i, climax in enumerate(climax_points[:2]):
-                print(
-                    f"     {i+1}. {climax.get('time', 0):.1f}s "
-                    f"(intensity: {climax.get('intensity', 0):.1%})"
-                )
+                print(f"     {i+1}. {climax.get('time', 0):.1f}s " f"(intensity: {climax.get('intensity', 0):.1%})")
         print()
 
         # Reference tags

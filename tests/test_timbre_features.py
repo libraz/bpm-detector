@@ -41,9 +41,7 @@ class TestTimbreFeatureExtractor(unittest.TestCase):
     def test_analyze_brightness(self):
         """Test brightness analysis."""
         features = self.extractor.extract_timbral_features(self.test_audio, self.sr)
-        brightness = self.extractor.analyze_brightness(
-            features['spectral_centroid'], self.sr
-        )
+        brightness = self.extractor.analyze_brightness(features['spectral_centroid'], self.sr)
 
         self.assertIsInstance(brightness, (int, float))
         self.assertGreaterEqual(brightness, 0.0)
@@ -82,12 +80,7 @@ class TestTimbreFeatureExtractor(unittest.TestCase):
         texture = self.extractor.analyze_texture(features)
 
         # Check required fields
-        expected_fields = [
-            'spectral_complexity',
-            'harmonic_richness',
-            'temporal_stability',
-            'timbral_consistency',
-        ]
+        expected_fields = ['spectral_complexity', 'harmonic_richness', 'temporal_stability', 'timbral_consistency']
         for field in expected_fields:
             self.assertIn(field, texture)
             self.assertIsInstance(texture[field], (int, float))

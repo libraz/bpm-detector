@@ -13,11 +13,14 @@
 audioread==3.0.1
     # via bpm-detector
     # via librosa
+autoflake==2.3.1
 black==25.1.0
 certifi==2025.4.26
     # via requests
 cffi==1.17.1
     # via soundfile
+cfgv==3.4.0
+    # via pre-commit
 charset-normalizer==3.4.2
     # via requests
 click==8.2.1
@@ -32,9 +35,15 @@ cycler==0.12.1
     # via matplotlib
 decorator==5.2.1
     # via librosa
+distlib==0.3.9
+    # via virtualenv
+filelock==3.18.0
+    # via virtualenv
 flake8==7.2.0
 fonttools==4.58.1
     # via matplotlib
+identify==2.6.12
+    # via pre-commit
 idna==3.10
     # via requests
 iniconfig==2.1.0
@@ -47,6 +56,8 @@ kiwisolver==1.4.8
     # via matplotlib
 lazy-loader==0.4
     # via librosa
+libcst==1.8.0
+    # via monkeytype
 librosa==0.11.0
     # via bpm-detector
 llvmlite==0.44.0
@@ -56,12 +67,16 @@ matplotlib==3.10.3
     # via seaborn
 mccabe==0.7.0
     # via flake8
+monkeytype==23.3.0
 msgpack==1.1.0
     # via librosa
 mypy==1.15.0
 mypy-extensions==1.1.0
     # via black
+    # via monkeytype
     # via mypy
+nodeenv==1.9.1
+    # via pre-commit
 numba==0.61.2
     # via librosa
     # via resampy
@@ -94,10 +109,12 @@ pillow==11.2.1
 platformdirs==4.3.8
     # via black
     # via pooch
+    # via virtualenv
 pluggy==1.6.0
     # via pytest
 pooch==1.8.2
     # via librosa
+pre-commit==4.2.0
 psutil==7.0.0
     # via bpm-detector
 pycodestyle==2.13.0
@@ -105,6 +122,7 @@ pycodestyle==2.13.0
 pycparser==2.22
     # via cffi
 pyflakes==3.3.2
+    # via autoflake
     # via flake8
 pyparsing==3.2.3
     # via matplotlib
@@ -116,6 +134,9 @@ python-dateutil==2.9.0.post0
     # via pandas
 pytz==2025.2
     # via pandas
+pyyaml==6.0.2
+    # via libcst
+    # via pre-commit
 requests==2.32.3
     # via pooch
 resampy==0.4.3
@@ -147,3 +168,5 @@ tzdata==2025.2
     # via pandas
 urllib3==2.4.0
     # via requests
+virtualenv==20.31.2
+    # via pre-commit
