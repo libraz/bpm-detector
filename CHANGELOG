@@ -1,9 +1,41 @@
 # Changelog
 
-## [0.2.0] - 2025-05-31
+## [1.1.0] - 2025-11-01
+
 ### Added
-- Fallback key output like `Unknown(E♭?)` with analysis notes.
-- Chord detection uses 2048 FFT and recognizes 7th/sus4 chords.
-- Drop chorus and last chorus modulation labeling.
+- Advanced audio analysis modules (chord, structure, rhythm, timbre, melody, dynamics)
+- Selective analysis options for faster targeted analysis
+- Quiet option for CLI with test coverage
+- Progress bar accuracy and user experience improvements
+
 ### Changed
-- Version bumped to 0.2.0.
+- Improved accuracy of audio analysis modules
+- Enhanced key/chord detection with drop chorus logic
+- Major codebase improvements with enhanced tooling and testing
+- Updated package dependencies
+
+### Fixed
+- CI test failures resolved
+- BPM selection bug
+- Progress bar update issues
+- Audio analysis accuracy and stability improvements
+- Noise audio confidence threshold in key detector test
+- Coverage configuration to report correct metrics (85%)
+- Unused global lint errors
+
+### Documentation
+- Fixed typos in README files
+- Updated progress flag usage documentation
+- Clarified commit and branch rules
+
+### Development
+- Configured black formatter and fixed lint issues
+- Applied black and isort formatting
+
+## [1.0.0] - 2025-05-29
+
+### Added
+- Initial release
+- BPM (tempo) detection from audio files
+- Musical key detection
+- Command-line interface for audio analysis

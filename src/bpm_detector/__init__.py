@@ -16,7 +16,7 @@ from .similarity_engine import SimilarityEngine
 from .structure_analyzer import StructureAnalyzer
 from .timbre_analyzer import TimbreAnalyzer
 
-__version__ = "0.2.0"
+__version__ = "1.1.0"
 __author__ = "libraz"
 __email__ = "libraz@libraz.net"
 
