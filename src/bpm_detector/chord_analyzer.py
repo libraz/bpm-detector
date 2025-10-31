@@ -146,12 +146,15 @@ class ChordProgressionAnalyzer:
 
         return np.asarray(smoothed)
 
-    def detect_chords(self, chroma: np.ndarray, bpm: float = 130.0) -> List[Tuple[str, float, int, int]]:
+    def detect_chords(
+        self, chroma: np.ndarray, bpm: float = 130.0, sr: int = 22050
+    ) -> List[Tuple[str, float, int, int]]:
         """Detect chords from chroma features with dynamic window sizing.
 
         Args:
             chroma: Chroma features matrix
             bpm: BPM for dynamic window calculation
+            sr: Sample rate (default: 22050)
 
         Returns:
             List of (chord_name, confidence, start_frame, end_frame)
@@ -166,7 +169,7 @@ class ChordProgressionAnalyzer:
         bars_per_window = 2
         window_duration = (bars_per_window * 4 * 60.0) / bpm  # 2 bars in seconds
         window_duration = max(1.0, window_duration)  # At least 1 second
-        window_size = max(1, int(22050 * window_duration / self.hop_length))
+        window_size = max(1, int(sr * window_duration / self.hop_length))
         step_size = max(1, window_size // 4)  # Overlap windows for better detection
 
         detected_chords = []
@@ -343,11 +346,12 @@ class ChordProgressionAnalyzer:
 
         return merged
 
-    def analyze_progression(self, chords: List[Tuple[str, float, int, int]]) -> Dict[str, Any]:
+    def analyze_progression(self, chords: List[Tuple[str, float, int, int]], sr: int = 22050) -> Dict[str, Any]:
         """Analyze chord progression patterns.
 
         Args:
             chords: List of detected chords
+            sr: Sample rate (default: 22050)
 
         Returns:
             Dictionary containing progression analysis
@@ -383,7 +387,7 @@ class ChordProgressionAnalyzer:
         # Calculate harmonic rhythm (chord changes per second)
         total_duration = sum(chord[3] - chord[2] for chord in chords)
         harmonic_rhythm = (
-            len([c for c in chords if c[0] != 'N']) / (total_duration * self.hop_length / 22050)
+            len([c for c in chords if c[0] != 'N']) / (total_duration * self.hop_length / sr)
             if total_duration > 0
             else 0
         )
@@ -662,10 +666,10 @@ class ChordProgressionAnalyzer:
         chroma = self.extract_chroma_features(y, sr)
 
         # Detect chords with dynamic window sizing
-        chords = self.detect_chords(chroma, bpm)
+        chords = self.detect_chords(chroma, bpm, sr)
 
         # Analyze progression
-        progression_analysis = self.analyze_progression(chords)
+        progression_analysis = self.analyze_progression(chords, sr)
 
         # Functional analysis if key is provided
         functional_analysis = []

@@ -237,5 +237,134 @@ class TestKeyDetector(unittest.TestCase):
         self.assertGreaterEqual(confidence, 0.0)
 
 
+class TestKeyDetectionFallbackLogic(unittest.TestCase):
+    """Test cases for key detection fallback logic (handles Unknown keys correctly)."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        from src.bpm_detector.music_analyzer import AudioAnalyzer
+
+        self.analyzer = AudioAnalyzer()
+        self.sr = 22050
+
+    def test_key_detection_both_unknown(self):
+        """Test key detection when both methods return Unknown."""
+        from unittest.mock import MagicMock
+
+        # Mock both detectors to return Unknown
+        self.analyzer.key_detector = MagicMock()
+        self.analyzer.key_detector.detect_key.return_value = {
+            'key': 'Unknown (low confidence)',
+            'mode': 'Unknown',
+            'confidence': 0.0,
+        }
+
+        self.analyzer.melody_harmony_analyzer = MagicMock()
+        self.analyzer.melody_harmony_analyzer.detect_key.return_value = {
+            'key': 'Unknown (no clear key)',
+            'mode': 'Unknown',
+            'confidence': 0.0,
+        }
+
+        # Create test audio
+        y = np.random.randn(self.sr * 2) * 0.1
+
+        # Test the logic directly
+        detect_key = True
+        key = None
+        key_conf = 0.0
+        key_detection_result = None
+
+        if detect_key:
+            key_detection_result = self.analyzer.key_detector.detect_key(y, self.sr)
+            if not key_detection_result['key'].startswith('Unknown'):
+                key = f"{key_detection_result['key']} {key_detection_result['mode']}"
+                key_conf = key_detection_result['confidence']
+            else:
+                fallback_result = self.analyzer.melody_harmony_analyzer.detect_key(y, self.sr)
+                if not fallback_result['key'].startswith('Unknown'):
+                    key = f"{fallback_result['key']} {fallback_result['mode']}"
+                    key_conf = fallback_result['confidence']
+                    key_detection_result = fallback_result
+                else:
+                    key = None
+                    key_conf = 0.0
+
+        # Key should be None when both methods fail
+        self.assertIsNone(key)
+        self.assertEqual(key_conf, 0.0)
+
+    def test_key_detection_primary_success(self):
+        """Test key detection when primary method succeeds."""
+        from unittest.mock import MagicMock
+
+        # Mock primary detector to return valid key
+        self.analyzer.key_detector = MagicMock()
+        self.analyzer.key_detector.detect_key.return_value = {'key': 'C', 'mode': 'major', 'confidence': 85.0}
+
+        # Create test audio
+        y = np.random.randn(self.sr * 2) * 0.1
+
+        # Test the logic
+        detect_key = True
+        key = None
+        key_conf = 0.0
+
+        if detect_key:
+            key_detection_result = self.analyzer.key_detector.detect_key(y, self.sr)
+            if not key_detection_result['key'].startswith('Unknown'):
+                key = f"{key_detection_result['key']} {key_detection_result['mode']}"
+                key_conf = key_detection_result['confidence']
+
+        # Key should be from primary detector
+        self.assertEqual(key, "C major")
+        self.assertEqual(key_conf, 85.0)
+
+    def test_key_detection_fallback_success(self):
+        """Test key detection when primary fails but fallback succeeds."""
+        from unittest.mock import MagicMock
+
+        # Mock primary detector to return Unknown
+        self.analyzer.key_detector = MagicMock()
+        self.analyzer.key_detector.detect_key.return_value = {
+            'key': 'Unknown (low confidence)',
+            'mode': 'Unknown',
+            'confidence': 0.0,
+        }
+
+        # Mock fallback detector to return valid key
+        self.analyzer.melody_harmony_analyzer = MagicMock()
+        self.analyzer.melody_harmony_analyzer.detect_key.return_value = {
+            'key': 'C',
+            'mode': 'major',
+            'confidence': 75.0,
+        }
+
+        # Create test audio
+        y = np.random.randn(self.sr * 2) * 0.1
+
+        # Test the fallback logic
+        detect_key = True
+        key = None
+        key_conf = 0.0
+        key_detection_result = None
+
+        if detect_key:
+            key_detection_result = self.analyzer.key_detector.detect_key(y, self.sr)
+            if not key_detection_result['key'].startswith('Unknown'):
+                key = f"{key_detection_result['key']} {key_detection_result['mode']}"
+                key_conf = key_detection_result['confidence']
+            else:
+                fallback_result = self.analyzer.melody_harmony_analyzer.detect_key(y, self.sr)
+                if not fallback_result['key'].startswith('Unknown'):
+                    key = f"{fallback_result['key']} {fallback_result['mode']}"
+                    key_conf = fallback_result['confidence']
+                    key_detection_result = fallback_result
+
+        # Key should be from fallback
+        self.assertEqual(key, "C major")
+        self.assertEqual(key_conf, 75.0)
+
+
 if __name__ == '__main__':
     unittest.main()

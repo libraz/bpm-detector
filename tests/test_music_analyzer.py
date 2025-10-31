@@ -603,5 +603,48 @@ class TestAudioAnalyzer(unittest.TestCase):
                 self.assertGreaterEqual(len(section_content.strip()), len(section.strip()))
 
 
+class TestBPMDetectorEdgeCases(unittest.TestCase):
+    """Test cases for BPM detection edge cases (empty clusters, silent audio, etc)."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        from src.bpm_detector.music_analyzer import BPMDetector
+
+        self.detector = BPMDetector()
+
+    def test_smart_choice_with_empty_clusters(self):
+        """Test smart_choice with empty clusters returns default values."""
+        # Test with empty clusters
+        bpm, conf = self.detector.smart_choice({}, 0)
+
+        # Should return default BPM (120.0) with zero confidence
+        self.assertEqual(bpm, 120.0)
+        self.assertEqual(conf, 0.0)
+
+    def test_smart_choice_with_empty_base_vals(self):
+        """Test smart_choice with empty base_vals returns default values."""
+        # Create a pathological case where base_vals could be empty
+        # This is very unlikely in practice but tests the safety check
+        clusters = {130.0: []}
+        bpm, conf = self.detector.smart_choice(clusters, 10)
+
+        # Should return default BPM (120.0) with zero confidence
+        self.assertEqual(bpm, 120.0)
+        self.assertEqual(conf, 0.0)
+
+    def test_smart_choice_with_valid_clusters(self):
+        """Test smart_choice with valid clusters works correctly."""
+        # Create valid clusters
+        clusters = {130.0: [(130.0, 10), (65.0, 5)], 120.0: [(120.0, 8)]}
+        bpm, conf = self.detector.smart_choice(clusters, 23)
+
+        # Should return a valid BPM and confidence
+        self.assertIsInstance(bpm, float)
+        self.assertGreater(bpm, 0)
+        self.assertIsInstance(conf, float)
+        self.assertGreaterEqual(conf, 0.0)
+        self.assertLessEqual(conf, 100.0)
+
+
 if __name__ == '__main__':
     unittest.main()

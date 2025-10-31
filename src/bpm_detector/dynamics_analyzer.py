@@ -215,13 +215,14 @@ class DynamicsAnalyzer:
         return float(max(0.01, perceived_loudness))  # Ensure minimum positive value
 
     def generate_energy_profile(
-        self, energy_features: Dict[str, np.ndarray], window_size: float = 1.0
+        self, energy_features: Dict[str, np.ndarray], window_size: float = 1.0, sr: int = 22050
     ) -> Dict[str, np.ndarray]:
         """Generate energy profile over time.
 
         Args:
             energy_features: Dictionary of energy features
             window_size: Window size in seconds for averaging
+            sr: Sample rate (default: 22050)
 
         Returns:
             Dictionary containing energy profile data
@@ -236,8 +237,7 @@ class DynamicsAnalyzer:
                 'energy_derivative': np.array([]),
             }
 
-        # Calculate window size in frames (assume 22050 Hz sample rate if not provided)
-        sr = 22050  # Default sample rate
+        # Calculate window size in frames
         window_frames = max(1, int(window_size * sr / self.hop_length))
 
         if window_frames >= len(rms):
@@ -279,13 +279,14 @@ class DynamicsAnalyzer:
         }
 
     def detect_climax_points(
-        self, energy_features: Dict[str, np.ndarray], prominence_threshold: float = 0.1
+        self, energy_features: Dict[str, np.ndarray], prominence_threshold: float = 0.1, sr: int = 22050
     ) -> Dict[str, Any]:
         """Detect climax points in the audio.
 
         Args:
             energy_features: Dictionary of energy features
             prominence_threshold: Minimum prominence for peak detection
+            sr: Sample rate (default: 22050)
 
         Returns:
             Dictionary containing climax point data
@@ -309,7 +310,6 @@ class DynamicsAnalyzer:
 
         # Find peaks in energy
         peak_threshold = np.mean(smoothed_rms) + np.std(smoothed_rms)
-        sr = 22050  # Default sample rate
         energy_peaks, _ = find_peaks(
             smoothed_rms, height=peak_threshold, distance=int(5 * sr / self.hop_length)  # Minimum 5 seconds apart
         )
@@ -479,13 +479,14 @@ class DynamicsAnalyzer:
         }
 
     def detect_dynamic_events(
-        self, energy_features: Dict[str, np.ndarray], threshold: float = 0.2
+        self, energy_features: Dict[str, np.ndarray], threshold: float = 0.2, sr: int = 22050
     ) -> Dict[str, List[Dict[str, Any]]]:
         """Detect significant dynamic events (drops, builds, etc.).
 
         Args:
             energy_features: Dictionary of energy features
             threshold: Threshold for event detection
+            sr: Sample rate (default: 22050)
 
         Returns:
             Dictionary containing lists of different event types
@@ -500,8 +501,6 @@ class DynamicsAnalyzer:
 
         # Calculate derivative to find rapid changes
         rms_diff = np.diff(smoothed_rms)
-
-        sr = 22050  # Default sample rate
         sudden_increases = []
         sudden_decreases = []
         sustained_peaks = []
@@ -606,10 +605,10 @@ class DynamicsAnalyzer:
         loudness = self.analyze_loudness(y, sr)
 
         # Generate energy profile
-        energy_profile = self.generate_energy_profile(energy_features)
+        energy_profile = self.generate_energy_profile(energy_features, sr=sr)
 
         # Detect climax points
-        climax_points_data = self.detect_climax_points(energy_features)
+        climax_points_data = self.detect_climax_points(energy_features, sr=sr)
 
         # Analyze tension curve
         tension_data = self.analyze_tension_curve(energy_features)
@@ -618,7 +617,7 @@ class DynamicsAnalyzer:
         energy_distribution = self.analyze_energy_distribution(energy_features)
 
         # Detect dynamic events
-        dynamic_events_data = self.detect_dynamic_events(energy_features)
+        dynamic_events_data = self.detect_dynamic_events(energy_features, sr=sr)
 
         # Convert climax points to list format expected by tests
         climax_points_list = []

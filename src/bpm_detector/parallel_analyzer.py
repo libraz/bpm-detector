@@ -1,7 +1,7 @@
 """Parallel audio analyzer with progress tracking and auto-optimization."""
 
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, cast
 
 import numpy as np
 
@@ -477,10 +477,10 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
 
         key = None
         key_conf = 0.0
-        key_detection_result = None
+        key_detection_result: Optional[Dict[str, Any]] = None
         if detect_key:
             # Use the improved key detection from new KeyDetector
-            key_detection_result = self.key_detector.detect_key(y, sr)
+            key_detection_result = cast(Dict[str, Any], self.key_detector.detect_key(y, sr))
             # Check for valid key detection (not Unknown format)
             if not key_detection_result['key'].startswith('Unknown'):
                 key = f"{key_detection_result['key']} {key_detection_result['mode']}"
@@ -488,8 +488,16 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
             else:
                 # Fallback to melody_harmony_analyzer
                 fallback_result = self.melody_harmony_analyzer.detect_key(y, sr)
-                key = f"{fallback_result['key']} {fallback_result['mode']}"
-                key_conf = fallback_result['confidence']
+                # Check fallback result as well
+                if not fallback_result['key'].startswith('Unknown'):
+                    key = f"{fallback_result['key']} {fallback_result['mode']}"
+                    key_conf = fallback_result['confidence']
+                    # Update key_detection_result for consistency
+                    key_detection_result = fallback_result
+                else:
+                    # Both methods failed, use None
+                    key = None
+                    key_conf = 0.0
             callback(90, "Key detection completed")
         else:
             callback(90, "Key detection skipped")
@@ -504,6 +512,7 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
             "bpm_candidates": list(zip(top_bpms, top_hits)),
             "key": key,
             "key_confidence": key_conf,
+            "key_detection_details": key_detection_result,  # Add for consistency
         }
 
     def _analyze_structure_with_progress(self, y, sr, callback, bpm=130.0):
@@ -568,7 +577,7 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
                     chroma = self.chord_analyzer.extract_chroma_features(segment, sr)
 
                     # Detect chords for this segment
-                    segment_chords = self.chord_analyzer.detect_chords(chroma)
+                    segment_chords = self.chord_analyzer.detect_chords(chroma, sr=sr)
 
                     # Get the most common chord progression for this section
                     if segment_chords:
@@ -606,11 +615,11 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
         callback(40, "Chroma features extracted")
 
         callback(50, "Detecting chords...")
-        chords = self.chord_analyzer.detect_chords(chroma, bpm)
+        chords = self.chord_analyzer.detect_chords(chroma, bpm, sr)
         callback(70, "Chords detected")
 
         callback(80, "Analyzing progression...")
-        progression_analysis = self.chord_analyzer.analyze_progression(chords)
+        progression_analysis = self.chord_analyzer.analyze_progression(chords, sr)
         callback(95, "Progression analysis completed")
 
         return {

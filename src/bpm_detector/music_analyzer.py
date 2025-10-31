@@ -1,7 +1,7 @@
 """BPM and Key detection algorithms."""
 
 import warnings
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import librosa
 import numpy as np
@@ -49,6 +49,10 @@ class BPMDetector:
 
     def smart_choice(self, clusters: Dict[float, List[Tuple[float, int]]], total_votes: int) -> Tuple[float, float]:
         """Choose the best BPM from clusters using smart selection."""
+        # Handle empty clusters
+        if not clusters:
+            return 120.0, 0.0  # Default BPM with zero confidence
+
         # base cluster = largest votes
         base, base_vals = max(clusters.items(), key=lambda kv: sum(v for _, v in kv[1]))
         base_votes = sum(v for _, v in base_vals)
@@ -61,6 +65,8 @@ class BPMDetector:
             rep_bpm = higher[0][0]
             conf = 100 * higher[0][1] / total_votes
         else:
+            if not base_vals:  # Additional safety check
+                return 120.0, 0.0
             rep_bpm = max(base_vals, key=lambda x: x[1])[0]
             conf = 100 * base_votes / total_votes
         return rep_bpm, conf
@@ -204,10 +210,10 @@ class AudioAnalyzer:
         # Key detection (using improved method from melody_harmony_analyzer)
         key = None
         key_conf = 0.0
-        key_detection_result = None
+        key_detection_result: Optional[Dict[str, Any]] = None
         if detect_key:
             # Use the improved key detection from new KeyDetector
-            key_detection_result = self.key_detector.detect_key(y, sr)
+            key_detection_result = cast(Dict[str, Any], self.key_detector.detect_key(y, sr))
             # Check for valid key detection (not Unknown format)
             if not key_detection_result['key'].startswith('Unknown'):
                 key = f"{key_detection_result['key']} {key_detection_result['mode']}"
@@ -215,8 +221,16 @@ class AudioAnalyzer:
             else:
                 # Fallback to melody_harmony_analyzer
                 fallback_result = self.melody_harmony_analyzer.detect_key(y, sr)
-                key = f"{fallback_result['key']} {fallback_result['mode']}"
-                key_conf = fallback_result['confidence']
+                # Check fallback result as well
+                if not fallback_result['key'].startswith('Unknown'):
+                    key = f"{fallback_result['key']} {fallback_result['mode']}"
+                    key_conf = fallback_result['confidence']
+                    # Update key_detection_result for consistency
+                    key_detection_result = fallback_result
+                else:
+                    # Both methods failed, use None
+                    key = None
+                    key_conf = 0.0
         update_progress()
 
         # Basic results
