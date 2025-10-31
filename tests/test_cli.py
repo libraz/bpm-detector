@@ -243,6 +243,141 @@ class TestCLI(unittest.TestCase):
         args = call_args[2]
         self.assertFalse(args.progress)
 
+    @patch("bpm_detector.cli.analyze_file_with_progress")
+    @patch("os.path.exists")
+    def test_main_selective_analysis_rhythm(self, mock_exists, mock_analyze):
+        """Test selective analysis with --rhythm flag."""
+        mock_exists.return_value = True
+
+        test_args = ["bpm-detector", "--rhythm", "test.wav"]
+
+        with patch("sys.argv", test_args):
+            with patch("sys.stdout", io.StringIO()):
+                main()
+
+        # Should call analyze_file_with_progress once
+        mock_analyze.assert_called_once()
+
+        # Check that rhythm analysis is enabled
+        call_args = mock_analyze.call_args[0]
+        args = call_args[2]
+        self.assertTrue(args.analyze_rhythm)
+        self.assertFalse(args.analyze_chords)
+        self.assertFalse(args.analyze_structure)
+        self.assertFalse(args.analyze_timbre)
+        self.assertFalse(args.analyze_melody)
+        self.assertFalse(args.analyze_dynamics)
+
+    @patch("bpm_detector.cli.analyze_file_with_progress")
+    @patch("os.path.exists")
+    def test_main_selective_analysis_multiple_flags(self, mock_exists, mock_analyze):
+        """Test selective analysis with multiple flags."""
+        mock_exists.return_value = True
+
+        test_args = ["bpm-detector", "--rhythm", "--melody", "--timbre", "test.wav"]
+
+        with patch("sys.argv", test_args):
+            with patch("sys.stdout", io.StringIO()):
+                main()
+
+        # Should call analyze_file_with_progress once
+        mock_analyze.assert_called_once()
+
+        # Check that selected analyses are enabled
+        call_args = mock_analyze.call_args[0]
+        args = call_args[2]
+        self.assertTrue(args.analyze_rhythm)
+        self.assertTrue(args.analyze_melody)
+        self.assertTrue(args.analyze_timbre)
+        self.assertFalse(args.analyze_chords)
+        self.assertFalse(args.analyze_structure)
+        self.assertFalse(args.analyze_dynamics)
+
+    @patch("bpm_detector.cli.analyze_file_with_progress")
+    @patch("os.path.exists")
+    def test_main_comprehensive_enables_all_analyses(self, mock_exists, mock_analyze):
+        """Test that --comprehensive enables all analysis flags."""
+        mock_exists.return_value = True
+
+        test_args = ["bpm-detector", "--comprehensive", "test.wav"]
+
+        with patch("sys.argv", test_args):
+            with patch("sys.stdout", io.StringIO()):
+                main()
+
+        # Should call analyze_file_with_progress once
+        mock_analyze.assert_called_once()
+
+        # Check that all analyses are enabled
+        call_args = mock_analyze.call_args[0]
+        args = call_args[2]
+        self.assertTrue(args.analyze_rhythm)
+        self.assertTrue(args.analyze_chords)
+        self.assertTrue(args.analyze_structure)
+        self.assertTrue(args.analyze_timbre)
+        self.assertTrue(args.analyze_melody)
+        self.assertTrue(args.analyze_dynamics)
+
+    def test_print_results_selective_rhythm(self):
+        """Test printing results with selective rhythm analysis."""
+        results = {
+            "basic_info": {
+                "filename": "test.wav",
+                "bpm": 120.5,
+                "bpm_confidence": 85.3,
+                "bpm_candidates": [(120.5, 45), (241.0, 23)],
+                "duration": 180.0,
+                "key": None,
+                "key_confidence": 0.0,
+            },
+            "rhythm": {"time_signature": "4/4", "groove_type": "straight"},
+        }
+
+        # Capture stdout
+        captured_output = io.StringIO()
+        with patch("sys.stdout", captured_output):
+            print_results(results, detect_key=False, comprehensive=False)
+
+        output = captured_output.getvalue()
+
+        # Check that rhythm information is present
+        self.assertIn("4/4", output)
+        self.assertIn("straight", output)
+        self.assertIn("Rhythm", output)
+
+    def test_print_results_selective_multiple(self):
+        """Test printing results with multiple selective analyses."""
+        results = {
+            "basic_info": {
+                "filename": "test.wav",
+                "bpm": 120.5,
+                "bpm_confidence": 85.3,
+                "bpm_candidates": [(120.5, 45)],
+                "duration": 180.0,
+                "key": "C Major",
+                "key_confidence": 80.0,
+            },
+            "rhythm": {"time_signature": "4/4", "groove_type": "straight"},
+            "timbre": {
+                "dominant_instruments": [{"instrument": "piano", "confidence": 0.8}],
+                "brightness": 0.7,
+                "warmth": 0.6,
+            },
+        }
+
+        # Capture stdout
+        captured_output = io.StringIO()
+        with patch("sys.stdout", captured_output):
+            print_results(results, detect_key=True, comprehensive=False)
+
+        output = captured_output.getvalue()
+
+        # Check that selected analyses are present
+        self.assertIn("Rhythm", output)
+        self.assertIn("4/4", output)
+        self.assertIn("Instruments", output)
+        self.assertIn("piano", output)
+
 
 if __name__ == "__main__":
     unittest.main()

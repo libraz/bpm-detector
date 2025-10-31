@@ -166,17 +166,29 @@ class AudioAnalyzer:
         max_bpm: float = 300.0,
         start_bpm: float = 150.0,
         progress_callback=None,
+        analyze_rhythm: bool = False,
+        analyze_chords: bool = False,
+        analyze_structure: bool = False,
+        analyze_timbre: bool = False,
+        analyze_melody: bool = False,
+        analyze_dynamics: bool = False,
     ) -> Dict[str, Any]:
         """Analyze audio file comprehensively.
 
         Args:
             path: Path to audio file
             detect_key: Whether to detect musical key
-            comprehensive: Whether to perform comprehensive analysis
+            comprehensive: Whether to perform comprehensive analysis (enables all features)
             min_bpm: Minimum BPM to consider
             max_bpm: Maximum BPM to consider
             start_bpm: Starting BPM for detection
             progress_callback: Optional callback for progress updates
+            analyze_rhythm: Whether to analyze rhythm and time signature
+            analyze_chords: Whether to analyze chord progressions
+            analyze_structure: Whether to analyze musical structure
+            analyze_timbre: Whether to analyze timbre and instruments
+            analyze_melody: Whether to analyze melody and harmony
+            analyze_dynamics: Whether to analyze dynamics
 
         Returns:
             Dictionary containing complete analysis results
@@ -250,62 +262,79 @@ class AudioAnalyzer:
 
         results = {"basic_info": basic_info}
 
-        if not comprehensive:
+        # Determine which analyses to run
+        # If comprehensive is True, enable all analyses
+        run_chords = comprehensive or analyze_chords
+        run_structure = comprehensive or analyze_structure
+        run_rhythm = comprehensive or analyze_rhythm
+        run_timbre = comprehensive or analyze_timbre
+        run_melody = comprehensive or analyze_melody
+        run_dynamics = comprehensive or analyze_dynamics
+
+        # If no specific analyses requested, return basic info
+        if not (run_chords or run_structure or run_rhythm or run_timbre or run_melody or run_dynamics):
             update_progress()
             return results
 
-        # Comprehensive analysis
+        # Selective or comprehensive analysis
         try:
             # Chord progression analysis
-            chord_analysis = self.chord_analyzer.analyze(y, sr, key or "C Major")
-            results["chord_progression"] = chord_analysis
-            update_progress()
+            if run_chords:
+                chord_analysis = self.chord_analyzer.analyze(y, sr, key or "C Major")
+                results["chord_progression"] = chord_analysis
+                update_progress()
 
             # Structure analysis
-            structure_analysis = self.structure_analyzer.analyze(y, sr)
-            results["structure"] = structure_analysis
-            update_progress()
+            if run_structure:
+                structure_analysis = self.structure_analyzer.analyze(y, sr)
+                results["structure"] = structure_analysis
+                update_progress()
 
             # Rhythm analysis
-            rhythm_analysis = self.rhythm_analyzer.analyze(y, sr)
-            results["rhythm"] = rhythm_analysis
-            update_progress()
+            if run_rhythm:
+                rhythm_analysis = self.rhythm_analyzer.analyze(y, sr)
+                results["rhythm"] = rhythm_analysis
+                update_progress()
 
             # Timbre analysis
-            timbre_analysis = self.timbre_analyzer.analyze(y, sr)
-            results["timbre"] = timbre_analysis
-            update_progress()
+            if run_timbre:
+                timbre_analysis = self.timbre_analyzer.analyze(y, sr)
+                results["timbre"] = timbre_analysis
+                update_progress()
 
             # Melody and harmony analysis
-            melody_harmony_analysis = self.melody_harmony_analyzer.analyze(y, sr)
-            results["melody_harmony"] = melody_harmony_analysis
-            update_progress()
+            if run_melody:
+                melody_harmony_analysis = self.melody_harmony_analyzer.analyze(y, sr)
+                results["melody_harmony"] = melody_harmony_analysis
+                update_progress()
 
             # Dynamics analysis
-            dynamics_analysis = self.dynamics_analyzer.analyze(y, sr)
-            results["dynamics"] = dynamics_analysis
-            update_progress()
+            if run_dynamics:
+                dynamics_analysis = self.dynamics_analyzer.analyze(y, sr)
+                results["dynamics"] = dynamics_analysis
+                update_progress()
 
-            # Generate feature vector and similarity data
-            feature_vector = self.similarity_engine.extract_feature_vector(results)
-            results["similarity_features"] = {
-                "feature_vector": feature_vector.tolist(),
-                "feature_weights": self.similarity_engine.feature_weights,
-            }
+            # Generate feature vector and similarity data only for comprehensive mode
+            if comprehensive:
+                feature_vector = self.similarity_engine.extract_feature_vector(results)
+                results["similarity_features"] = {
+                    "feature_vector": feature_vector.tolist(),
+                    "feature_weights": self.similarity_engine.feature_weights,
+                }
 
-            # Generate reference tags
-            reference_tags = self._generate_reference_tags(results)
-            results["reference_tags"] = reference_tags  # type: ignore
+                # Generate reference tags
+                reference_tags = self._generate_reference_tags(results)
+                results["reference_tags"] = reference_tags  # type: ignore
 
-            # Generate production notes
-            production_notes = self._generate_production_notes(results)
-            results["production_notes"] = production_notes
+                # Generate production notes
+                production_notes = self._generate_production_notes(results)
+                results["production_notes"] = production_notes
 
-            update_progress()
+                update_progress()
 
         except Exception as e:
-            print(f"Warning: Error in comprehensive analysis: {e}")
-            # Continue with basic results if comprehensive analysis fails
+            print(f"Warning: Error in analysis: {e}")
+            # Continue with basic results if analysis fails
         finally:
             # Clear cache and free memory after analysis
             if hasattr(self, '_feature_cache'):

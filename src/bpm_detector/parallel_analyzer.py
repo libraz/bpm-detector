@@ -63,12 +63,29 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
         max_bpm: float = 300.0,
         start_bpm: float = 150.0,
         progress_callback=None,
-        detailed_progress: bool = False,
+        analyze_rhythm: bool = False,
+        analyze_chords: bool = False,
+        analyze_structure: bool = False,
+        analyze_timbre: bool = False,
+        analyze_melody: bool = False,
+        analyze_dynamics: bool = False,
         **kwargs,
     ) -> Dict[str, Any]:
         """Analyze audio file with smart parallelization."""
         return self._analyze_single_file(
-            path, detect_key, comprehensive, min_bpm, max_bpm, start_bpm, progress_callback
+            path,
+            detect_key,
+            comprehensive,
+            min_bpm,
+            max_bpm,
+            start_bpm,
+            progress_callback,
+            analyze_rhythm,
+            analyze_chords,
+            analyze_structure,
+            analyze_timbre,
+            analyze_melody,
+            analyze_dynamics,
         )
 
     def analyze_files(
@@ -94,11 +111,44 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
         max_bpm: float = 300.0,
         start_bpm: float = 150.0,
         progress_callback=None,
+        analyze_rhythm: bool = False,
+        analyze_chords: bool = False,
+        analyze_structure: bool = False,
+        analyze_timbre: bool = False,
+        analyze_melody: bool = False,
+        analyze_dynamics: bool = False,
     ) -> Dict[str, Any]:
         """Analyze single file with parallel processing."""
 
-        if not comprehensive or not self._should_use_parallel():
-            return super().analyze_file(path, detect_key, comprehensive, min_bpm, max_bpm, start_bpm, progress_callback)
+        # Check if any selective analysis is requested
+        has_selective = (
+            analyze_rhythm
+            or analyze_chords
+            or analyze_structure
+            or analyze_timbre
+            or analyze_melody
+            or analyze_dynamics
+        )
+
+        # Use regular (non-parallel) analysis if:
+        # - Not comprehensive AND no selective analysis requested, OR
+        # - Should not use parallel processing
+        if (not comprehensive and not has_selective) or not self._should_use_parallel():
+            return super().analyze_file(
+                path,
+                detect_key,
+                comprehensive,
+                min_bpm,
+                max_bpm,
+                start_bpm,
+                progress_callback,
+                analyze_rhythm,
+                analyze_chords,
+                analyze_structure,
+                analyze_timbre,
+                analyze_melody,
+                analyze_dynamics,
+            )
 
         # Setup progress management with debug mode
         import os
@@ -153,7 +203,7 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
             if progress_callback:
                 progress_callback(10, "Starting parallel analysis...")
 
-            # Parallel comprehensive analysis
+            # Parallel comprehensive or selective analysis
             results = self._parallel_comprehensive_analysis(
                 y,
                 sr,
@@ -164,6 +214,13 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
                 max_bpm=max_bpm,
                 start_bpm=start_bpm,
                 progress_callback=progress_callback,
+                comprehensive=comprehensive,
+                analyze_rhythm=analyze_rhythm,
+                analyze_chords=analyze_chords,
+                analyze_structure=analyze_structure,
+                analyze_timbre=analyze_timbre,
+                analyze_melody=analyze_melody,
+                analyze_dynamics=analyze_dynamics,
             )
 
             # Clear audio data from memory early
@@ -227,19 +284,39 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
         max_bpm: float = 300.0,
         start_bpm: float = 150.0,
         progress_callback=None,
+        comprehensive: bool = True,
+        analyze_rhythm: bool = False,
+        analyze_chords: bool = False,
+        analyze_structure: bool = False,
+        analyze_timbre: bool = False,
+        analyze_melody: bool = False,
+        analyze_dynamics: bool = False,
     ) -> Dict[str, Any]:
-        """Perform parallel comprehensive analysis."""
+        """Perform parallel comprehensive or selective analysis."""
 
-        # Register analysis tasks
-        analysis_tasks = [
-            ('basic_info', 'Basic Analysis'),
-            ('chord_progression', 'Chord Progression'),
-            ('structure', 'Structure Analysis'),
-            ('rhythm', 'Rhythm Analysis'),
-            ('timbre', 'Timbre Analysis'),
-            ('melody_harmony', 'Melody & Harmony'),
-            ('dynamics', 'Dynamics Analysis'),
-        ]
+        # Determine which analyses to run
+        run_chords = comprehensive or analyze_chords
+        run_structure = comprehensive or analyze_structure
+        run_rhythm = comprehensive or analyze_rhythm
+        run_timbre = comprehensive or analyze_timbre
+        run_melody = comprehensive or analyze_melody
+        run_dynamics = comprehensive or analyze_dynamics
+
+        # Register analysis tasks based on what's requested
+        analysis_tasks = [('basic_info', 'Basic Analysis')]
+
+        if run_chords:
+            analysis_tasks.append(('chord_progression', 'Chord Progression'))
+        if run_structure:
+            analysis_tasks.append(('structure', 'Structure Analysis'))
+        if run_rhythm:
+            analysis_tasks.append(('rhythm', 'Rhythm Analysis'))
+        if run_timbre:
+            analysis_tasks.append(('timbre', 'Timbre Analysis'))
+        if run_melody:
+            analysis_tasks.append(('melody_harmony', 'Melody & Harmony'))
+        if run_dynamics:
+            analysis_tasks.append(('dynamics', 'Dynamics Analysis'))
 
         for task_id, name in analysis_tasks:
             progress_manager.register_task(task_id, name)
@@ -259,8 +336,11 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
 
         # Parallel analysis execution
         with ThreadPoolExecutor(max_workers=effective_workers) as executor:
-            futures = {
-                'chord_progression': executor.submit(
+            futures = {}
+
+            # Only submit tasks that are requested
+            if run_chords:
+                futures['chord_progression'] = executor.submit(
                     self._analyze_with_progress,
                     'chord_progression',
                     progress_manager,
@@ -269,8 +349,10 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
                     sr,
                     key,
                     float(basic_info.get('bpm', 130.0)),
-                ),
-                'structure': executor.submit(
+                )
+
+            if run_structure:
+                futures['structure'] = executor.submit(
                     self._analyze_with_progress,
                     'structure',
                     progress_manager,
@@ -278,25 +360,32 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
                     y,
                     sr,
                     float(basic_info.get('bpm', 130.0)),
-                ),
-                'rhythm': executor.submit(
+                )
+
+            if run_rhythm:
+                futures['rhythm'] = executor.submit(
                     self._analyze_with_progress, 'rhythm', progress_manager, self.rhythm_analyzer.analyze, y, sr
-                ),
-                'timbre': executor.submit(
+                )
+
+            if run_timbre:
+                futures['timbre'] = executor.submit(
                     self._analyze_with_progress, 'timbre', progress_manager, self.timbre_analyzer.analyze, y, sr
-                ),
-                'melody_harmony': executor.submit(
+                )
+
+            if run_melody:
+                futures['melody_harmony'] = executor.submit(
                     self._analyze_with_progress,
                     'melody_harmony',
                     progress_manager,
                     self.melody_harmony_analyzer.analyze,
                     y,
                     sr,
-                ),
-                'dynamics': executor.submit(
+                )
+
+            if run_dynamics:
+                futures['dynamics'] = executor.submit(
                     self._analyze_with_progress, 'dynamics', progress_manager, self.dynamics_analyzer.analyze, y, sr
-                ),
-            }
+                )
 
             # Collect results
             results = {'basic_info': basic_info}
@@ -309,28 +398,29 @@ class SmartParallelAudioAnalyzer(AudioAnalyzer):
                     progress_manager.complete_task(task_id, False, str(e))
                     results[task_id] = {}
 
-        # Generate additional features with progress updates
-        try:
-            # Update progress for final processing
-            if progress_callback:
-                progress_callback(95, "Generating similarity features...")
+        # Generate additional features with progress updates (only in comprehensive mode)
+        if comprehensive:
+            try:
+                # Update progress for final processing
+                if progress_callback:
+                    progress_callback(95, "Generating similarity features...")
 
-            feature_vector = self.similarity_engine.extract_feature_vector(results)
-            results["similarity_features"] = {
-                "feature_vector": feature_vector.tolist(),
-                "feature_weights": self.similarity_engine.feature_weights,
-            }
+                feature_vector = self.similarity_engine.extract_feature_vector(results)
+                results["similarity_features"] = {
+                    "feature_vector": feature_vector.tolist(),
+                    "feature_weights": self.similarity_engine.feature_weights,
+                }
 
-            if progress_callback:
-                progress_callback(97, "Generating reference tags...")
-            results["reference_tags"] = self._generate_reference_tags(results)
+                if progress_callback:
+                    progress_callback(97, "Generating reference tags...")
+                results["reference_tags"] = self._generate_reference_tags(results)
 
-            if progress_callback:
-                progress_callback(99, "Finalizing analysis...")
-            results["production_notes"] = self._generate_production_notes(results)
+                if progress_callback:
+                    progress_callback(99, "Finalizing analysis...")
+                results["production_notes"] = self._generate_production_notes(results)
 
-        except Exception as e:
-            print(f"Warning: Error generating additional features: {e}")
+            except Exception as e:
+                print(f"Warning: Error generating additional features: {e}")
 
         return results
 

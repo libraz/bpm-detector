@@ -19,7 +19,7 @@
   - クロマ特徴量ベースの解析
   - 低信頼度時は `Unknown(E♭?)` 形式で候補表示
 
-### 包括的楽曲解析（新機能！）
+### 包括的楽曲解析
 - **コード進行解析**: 自動和音検出とハーモニー解析
   - コード進行の識別（C-Am-F-G）
   - 機能和声分析（I-vi-IV-V）
@@ -58,7 +58,7 @@
   - 楽曲発注用参考タグ
   - 類似度マッチング用特徴ベクトル生成
 
-### 高度な構造解析（新機能！）
+### 高度な構造解析
 - **セクション分類**: インテリジェントな楽曲セクション検出
   - イントロ、Aメロ、サビ、ブリッジ、アウトロの自動識別
   - 音響特徴を使用したコンテキスト認識分類
@@ -75,7 +75,7 @@
   - 文字記法による楽曲形式解析（ABABCB）
   - 構造複雑度スコアリング
 
-### 並列処理・パフォーマンス（新機能！）
+### 並列処理・パフォーマンス
 - **スマート並列処理**: CPUベースの自動最適化
   - システム能力の自動検出（CPUコア、メモリ、負荷）
   - システムパフォーマンスに基づく適応的ワーカー数
@@ -91,6 +91,20 @@
   - 高性能システム（8+コア）で3-7倍高速
   - インテリジェントメモリ管理
   - ワークロードに基づくプロセス対スレッドプール選択
+
+### 選択的解析
+- **柔軟な解析オプション**: 必要な情報だけを解析
+  - `--rhythm`: リズムと拍子のみを解析
+  - `--chords`: コード進行のみを解析
+  - `--structure`: 楽曲構造のみを解析
+  - `--timbre`: 音色と楽器のみを解析
+  - `--melody`: メロディとハーモニーのみを解析
+  - `--dynamics`: ダイナミクスのみを解析
+  - オプションを組み合わせてカスタム解析パイプラインを構築
+- **パフォーマンスの利点**: 不要な計算をスキップして高速化
+  - ターゲット解析で処理時間を大幅に削減
+  - メモリ使用量の低減
+  - 特定の機能のみが必要なバッチ処理に最適
 
 ## クイックリンク
 
@@ -155,7 +169,24 @@ bpm-detector --detect-key *.wav *.mp3
 # 進捗表示を抑制
 bpm-detector --quiet --detect-key your_audio_file.wav
 
-# 並列処理（新機能！）
+# 選択的解析 - 必要な情報だけを高速に解析
+bpm-detector --rhythm your_audio_file.wav  # BPM + 拍子のみ
+bpm-detector --detect-key --rhythm your_audio_file.wav  # BPM + キー + リズム
+bpm-detector --melody --timbre your_audio_file.wav  # BPM + メロディ + 楽器
+bpm-detector --rhythm --chords --structure your_audio_file.wav  # 複数の解析
+
+# 利用可能な選択的解析オプション：
+#   --rhythm    : リズムと拍子を解析
+#   --chords    : コード進行を解析
+#   --structure : 楽曲構造を解析
+#   --timbre    : 音色と楽器を解析
+#   --melody    : メロディとハーモニーを解析
+#   --dynamics  : ダイナミクスを解析
+
+# 包括的解析（全機能）
+bpm-detector --comprehensive your_audio_file.wav
+
+# 並列処理
 bpm-detector --comprehensive your_audio_file.wav  # 自動並列処理がデフォルトで有効
 bpm-detector --comprehensive --max-workers 4 your_audio_file.wav  # 手動ワーカー数設定
 bpm-detector --comprehensive --no-parallel your_audio_file.wav  # 並列処理を無効化
@@ -178,6 +209,48 @@ results = analyzer.analyze_file('song.wav', detect_key=True, comprehensive=False
 print(f"BPM: {results['basic_info']['bpm']:.1f}")
 print(f"キー: {results['basic_info']['key']}")
 print(f"長さ: {results['basic_info']['duration']:.1f}秒")
+```
+
+#### 選択的解析（高速＆効率的）
+```python
+from bpm_detector import AudioAnalyzer
+
+analyzer = AudioAnalyzer()
+
+# リズムと拍子のみを解析（最速）
+results = analyzer.analyze_file(
+    'song.wav',
+    detect_key=False,
+    comprehensive=False,
+    analyze_rhythm=True
+)
+print(f"BPM: {results['basic_info']['bpm']:.1f}")
+print(f"拍子: {results['rhythm']['time_signature']}")
+print(f"グルーヴ: {results['rhythm']['groove_type']}")
+
+# 複数の選択的解析
+results = analyzer.analyze_file(
+    'song.wav',
+    detect_key=True,
+    comprehensive=False,
+    analyze_rhythm=True,
+    analyze_melody=True,
+    analyze_timbre=True
+)
+
+# 選択した解析結果にアクセス
+print(f"キー: {results['basic_info']['key']}")
+print(f"拍子: {results['rhythm']['time_signature']}")
+print(f"楽器: {results['timbre']['dominant_instruments']}")
+print(f"ボーカルレンジ: {results['melody_harmony']['melodic_range']}")
+
+# 利用可能な選択的解析パラメータ：
+#   analyze_rhythm=True    : リズムと拍子
+#   analyze_chords=True    : コード進行
+#   analyze_structure=True : 楽曲構造
+#   analyze_timbre=True    : 音色と楽器
+#   analyze_melody=True    : メロディとハーモニー
+#   analyze_dynamics=True  : ダイナミクス
 ```
 
 #### 包括的解析（詳細）
@@ -209,7 +282,7 @@ reference_sheet = analyzer.generate_reference_sheet(results)
 print(reference_sheet)
 ```
 
-#### スマート並列処理（新機能！）
+#### スマート並列処理
 ```python
 from bpm_detector import SmartParallelAudioAnalyzer
 
@@ -318,7 +391,7 @@ docker run --rm -v $(pwd):/workspace bpm-detector --help
 - `--max_bpm MAX_BPM`: 最大BPM（デフォルト: 300.0）
 - `--start_bpm START_BPM`: 開始BPM（デフォルト: 150.0）
 
-#### 並列処理オプション（新機能！）
+#### 並列処理オプション
 - `--auto-parallel`: 自動並列最適化を有効にする（デフォルト: 有効）
 - `--no-parallel`: 並列処理を無効にする
 - `--max-workers N`: 自動ワーカー数をオーバーライド
@@ -477,7 +550,7 @@ example.wav
 - seaborn >= 0.12.0
 - pandas >= 2.0.0
 
-### 並列処理依存関係（新機能！）
+### 並列処理依存関係
 - psutil >= 5.9.0（システム監視とリソース管理）
 
 ## コントリビューション

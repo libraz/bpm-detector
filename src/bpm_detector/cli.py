@@ -99,7 +99,12 @@ def print_results(results: dict, detect_key: bool = False, comprehensive: bool =
 
     print(f"\n{Fore.CYAN}{Style.BRIGHT}{filename}{Style.RESET_ALL}")
 
-    if comprehensive and "basic_info" in results:
+    # Show additional analysis if available (for both comprehensive and selective analysis)
+    has_additional_analysis = any(
+        key in results for key in ["chord_progression", "structure", "rhythm", "timbre", "melody_harmony", "dynamics"]
+    )
+
+    if (comprehensive or has_additional_analysis) and "basic_info" in results:
         # Show comprehensive summary first
         duration = basic_info.get("duration", 0)
         print(
@@ -308,6 +313,12 @@ def analyze_file_with_progress(path: str, analyzer, args: argparse.Namespace) ->
                 max_bpm=args.max_bpm,
                 start_bpm=args.start_bpm,
                 progress_callback=(smart_progress_callback if args.progress else None),
+                analyze_rhythm=args.analyze_rhythm,
+                analyze_chords=args.analyze_chords,
+                analyze_structure=args.analyze_structure,
+                analyze_timbre=args.analyze_timbre,
+                analyze_melody=args.analyze_melody,
+                analyze_dynamics=args.analyze_dynamics,
             )
 
             if progress_display:
@@ -347,6 +358,12 @@ def analyze_file_with_progress(path: str, analyzer, args: argparse.Namespace) ->
                 max_bpm=args.max_bpm,
                 start_bpm=args.start_bpm,
                 progress_callback=progress_callback,
+                analyze_rhythm=args.analyze_rhythm,
+                analyze_chords=args.analyze_chords,
+                analyze_structure=args.analyze_structure,
+                analyze_timbre=args.analyze_timbre,
+                analyze_melody=args.analyze_melody,
+                analyze_dynamics=args.analyze_dynamics,
             )
 
             if bar:
@@ -375,6 +392,15 @@ def main() -> None:
         "--detect-modulation", action="store_true", help="Enable modulation detection (requires --detect-key)"
     )
     parser.add_argument("--comprehensive", action="store_true", help="Enable comprehensive music analysis")
+
+    # Selective analysis options
+    analysis_group = parser.add_argument_group('Selective Analysis')
+    analysis_group.add_argument("--rhythm", action="store_true", help="Analyze rhythm and time signature")
+    analysis_group.add_argument("--chords", action="store_true", help="Analyze chord progressions")
+    analysis_group.add_argument("--structure", action="store_true", help="Analyze musical structure")
+    analysis_group.add_argument("--timbre", action="store_true", help="Analyze timbre and instruments")
+    analysis_group.add_argument("--melody", action="store_true", help="Analyze melody and harmony")
+    analysis_group.add_argument("--dynamics", action="store_true", help="Analyze dynamics")
 
     # Parallel processing options
     parallel_group = parser.add_argument_group('Parallel Processing')
@@ -407,6 +433,24 @@ def main() -> None:
 
     # Progress is enabled by default, disabled with --quiet
     args.progress = not args.quiet
+
+    # Determine selective analysis flags
+    # If --comprehensive is set, enable all analyses
+    if args.comprehensive:
+        args.analyze_rhythm = True
+        args.analyze_chords = True
+        args.analyze_structure = True
+        args.analyze_timbre = True
+        args.analyze_melody = True
+        args.analyze_dynamics = True
+    else:
+        # Use individual flags
+        args.analyze_rhythm = args.rhythm
+        args.analyze_chords = args.chords
+        args.analyze_structure = args.structure
+        args.analyze_timbre = args.timbre
+        args.analyze_melody = args.melody
+        args.analyze_dynamics = args.dynamics
 
     # Initialize analyzer
     global current_analyzer
@@ -468,6 +512,12 @@ def main() -> None:
                     min_bpm=args.min_bpm,
                     max_bpm=args.max_bpm,
                     start_bpm=args.start_bpm,
+                    analyze_rhythm=args.analyze_rhythm,
+                    analyze_chords=args.analyze_chords,
+                    analyze_structure=args.analyze_structure,
+                    analyze_timbre=args.analyze_timbre,
+                    analyze_melody=args.analyze_melody,
+                    analyze_dynamics=args.analyze_dynamics,
                 )
 
                 if args.progress:

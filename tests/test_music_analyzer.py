@@ -602,6 +602,153 @@ class TestAudioAnalyzer(unittest.TestCase):
                 # Should have content (allowing for minimal content)
                 self.assertGreaterEqual(len(section_content.strip()), len(section.strip()))
 
+    def test_selective_analysis_rhythm_only(self):
+        """Test selective analysis with rhythm only."""
+        results = self.analyzer.analyze_file(
+            self.temp_file.name, detect_key=False, comprehensive=False, analyze_rhythm=True
+        )
+
+        # Check basic info is present
+        self.assertIn('basic_info', results)
+
+        # Check that only rhythm analysis is present
+        self.assertIn('rhythm', results)
+        self.assertNotIn('chord_progression', results)
+        self.assertNotIn('structure', results)
+        self.assertNotIn('timbre', results)
+        self.assertNotIn('melody_harmony', results)
+        self.assertNotIn('dynamics', results)
+
+        # Verify rhythm data structure
+        rhythm = results['rhythm']
+        self.assertIsInstance(rhythm, dict)
+        self.assertIn('time_signature', rhythm)
+        self.assertIn('groove_type', rhythm)
+
+    def test_selective_analysis_multiple(self):
+        """Test selective analysis with multiple features."""
+        results = self.analyzer.analyze_file(
+            self.temp_file.name,
+            detect_key=False,
+            comprehensive=False,
+            analyze_rhythm=True,
+            analyze_timbre=True,
+            analyze_melody=True,
+        )
+
+        # Check basic info is present
+        self.assertIn('basic_info', results)
+
+        # Check that selected analyses are present
+        self.assertIn('rhythm', results)
+        self.assertIn('timbre', results)
+        self.assertIn('melody_harmony', results)
+
+        # Check that non-selected analyses are NOT present
+        self.assertNotIn('chord_progression', results)
+        self.assertNotIn('structure', results)
+        self.assertNotIn('dynamics', results)
+
+        # Verify that similarity features are NOT generated for selective analysis
+        self.assertNotIn('similarity_features', results)
+        self.assertNotIn('reference_tags', results)
+        self.assertNotIn('production_notes', results)
+
+    def test_selective_analysis_chords_only(self):
+        """Test selective analysis with chords only."""
+        results = self.analyzer.analyze_file(
+            self.temp_file.name, detect_key=True, comprehensive=False, analyze_chords=True
+        )
+
+        # Check basic info is present
+        self.assertIn('basic_info', results)
+
+        # Check that only chord analysis is present
+        self.assertIn('chord_progression', results)
+        self.assertNotIn('rhythm', results)
+        self.assertNotIn('structure', results)
+        self.assertNotIn('timbre', results)
+        self.assertNotIn('melody_harmony', results)
+        self.assertNotIn('dynamics', results)
+
+    def test_selective_analysis_all_flags(self):
+        """Test selective analysis with all flags (equivalent to comprehensive)."""
+        results = self.analyzer.analyze_file(
+            self.temp_file.name,
+            detect_key=True,
+            comprehensive=False,
+            analyze_rhythm=True,
+            analyze_chords=True,
+            analyze_structure=True,
+            analyze_timbre=True,
+            analyze_melody=True,
+            analyze_dynamics=True,
+        )
+
+        # Check basic info is present
+        self.assertIn('basic_info', results)
+
+        # Check that all analyses are present
+        self.assertIn('chord_progression', results)
+        self.assertIn('rhythm', results)
+        self.assertIn('structure', results)
+        self.assertIn('timbre', results)
+        self.assertIn('melody_harmony', results)
+        self.assertIn('dynamics', results)
+
+        # Note: similarity features are only generated in comprehensive mode
+        self.assertNotIn('similarity_features', results)
+
+    def test_comprehensive_vs_selective_all(self):
+        """Test that comprehensive mode includes extras not in selective all."""
+        results_comprehensive = self.analyzer.analyze_file(self.temp_file.name, comprehensive=True)
+
+        results_selective = self.analyzer.analyze_file(
+            self.temp_file.name,
+            comprehensive=False,
+            analyze_rhythm=True,
+            analyze_chords=True,
+            analyze_structure=True,
+            analyze_timbre=True,
+            analyze_melody=True,
+            analyze_dynamics=True,
+        )
+
+        # Comprehensive should have similarity features
+        self.assertIn('similarity_features', results_comprehensive)
+        self.assertIn('reference_tags', results_comprehensive)
+        self.assertIn('production_notes', results_comprehensive)
+
+        # Selective (even with all flags) should NOT have these extras
+        self.assertNotIn('similarity_features', results_selective)
+        self.assertNotIn('reference_tags', results_selective)
+        self.assertNotIn('production_notes', results_selective)
+
+    def test_no_selective_flags_returns_basic_only(self):
+        """Test that no selective flags returns only basic info."""
+        results = self.analyzer.analyze_file(
+            self.temp_file.name,
+            detect_key=False,
+            comprehensive=False,
+            analyze_rhythm=False,
+            analyze_chords=False,
+            analyze_structure=False,
+            analyze_timbre=False,
+            analyze_melody=False,
+            analyze_dynamics=False,
+        )
+
+        # Check basic info is present
+        self.assertIn('basic_info', results)
+
+        # Check that no additional analyses are present
+        self.assertNotIn('chord_progression', results)
+        self.assertNotIn('rhythm', results)
+        self.assertNotIn('structure', results)
+        self.assertNotIn('timbre', results)
+        self.assertNotIn('melody_harmony', results)
+        self.assertNotIn('dynamics', results)
+
 
 class TestBPMDetectorEdgeCases(unittest.TestCase):
     """Test cases for BPM detection edge cases (empty clusters, silent audio, etc)."""

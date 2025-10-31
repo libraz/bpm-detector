@@ -19,7 +19,7 @@ A comprehensive Python tool for automatic music analysis including BPM, key dete
   - Chroma feature-based analysis
   - Returns fallback as `Unknown(E♭?)` when confidence is low
 
-### Advanced Music Analysis (NEW!)
+### Advanced Music Analysis
 - **Chord Progression Analysis**: Automatic chord detection and harmonic analysis
   - Chord sequence identification (C-Am-F-G)
   - Functional harmony analysis (I-vi-IV-V)
@@ -57,7 +57,7 @@ A comprehensive Python tool for automatic music analysis including BPM, key dete
   - Reference tags for music commissioning
   - Feature vector generation for similarity matching
 
-### Advanced Structure Analysis (NEW!)
+### Advanced Structure Analysis
 - **Section Classification**: Intelligent musical section detection
   - Automatic identification of intro, verse, chorus, bridge, outro
   - Context-aware classification using audio characteristics
@@ -74,7 +74,7 @@ A comprehensive Python tool for automatic music analysis including BPM, key dete
   - Form analysis with letter notation (ABABCB)
   - Structural complexity scoring
 
-### Parallel Processing & Performance (NEW!)
+### Parallel Processing & Performance
 - **Smart Parallel Processing**: Automatic CPU-based optimization
   - Auto-detection of system capabilities (CPU cores, memory, load)
   - Adaptive worker count based on system performance
@@ -90,6 +90,20 @@ A comprehensive Python tool for automatic music analysis including BPM, key dete
   - 3-7x faster on high-performance systems (8+ cores)
   - Intelligent memory management
   - Process vs thread pool selection based on workload
+
+### Selective Analysis
+- **Flexible Analysis Options**: Analyze only what you need
+  - `--rhythm`: Analyze rhythm and time signature only
+  - `--chords`: Analyze chord progressions only
+  - `--structure`: Analyze musical structure only
+  - `--timbre`: Analyze timbre and instruments only
+  - `--melody`: Analyze melody and harmony only
+  - `--dynamics`: Analyze dynamics only
+  - Mix and match options for custom analysis pipelines
+- **Performance Benefits**: Faster analysis by skipping unnecessary computations
+  - Significantly reduced processing time for targeted analysis
+  - Lower memory usage
+  - Ideal for batch processing when only specific features are needed
 
 ## Quick Links
 
@@ -154,7 +168,24 @@ bpm-detector --detect-key *.wav *.mp3
 # Suppress progress output
 bpm-detector --quiet --detect-key your_audio_file.wav
 
-# Parallel processing (NEW!)
+# Selective analysis - Analyze only what you need for faster results
+bpm-detector --rhythm your_audio_file.wav  # BPM + time signature only
+bpm-detector --detect-key --rhythm your_audio_file.wav  # BPM + key + rhythm
+bpm-detector --melody --timbre your_audio_file.wav  # BPM + melody + instruments
+bpm-detector --rhythm --chords --structure your_audio_file.wav  # Multiple analyses
+
+# Available selective analysis options:
+#   --rhythm    : Analyze rhythm and time signature
+#   --chords    : Analyze chord progressions
+#   --structure : Analyze musical structure
+#   --timbre    : Analyze timbre and instruments
+#   --melody    : Analyze melody and harmony
+#   --dynamics  : Analyze dynamics
+
+# Comprehensive analysis (all features)
+bpm-detector --comprehensive your_audio_file.wav
+
+# Parallel processing
 bpm-detector --comprehensive your_audio_file.wav  # Auto-parallel enabled by default
 bpm-detector --comprehensive --max-workers 4 your_audio_file.wav  # Manual worker count
 bpm-detector --comprehensive --no-parallel your_audio_file.wav  # Disable parallel processing
@@ -177,6 +208,48 @@ results = analyzer.analyze_file('song.wav', detect_key=True, comprehensive=False
 print(f"BPM: {results['basic_info']['bpm']:.1f}")
 print(f"Key: {results['basic_info']['key']}")
 print(f"Duration: {results['basic_info']['duration']:.1f} seconds")
+```
+
+#### Selective Analysis (Fast & Efficient)
+```python
+from bpm_detector import AudioAnalyzer
+
+analyzer = AudioAnalyzer()
+
+# Analyze only rhythm and time signature (fastest)
+results = analyzer.analyze_file(
+    'song.wav',
+    detect_key=False,
+    comprehensive=False,
+    analyze_rhythm=True
+)
+print(f"BPM: {results['basic_info']['bpm']:.1f}")
+print(f"Time Signature: {results['rhythm']['time_signature']}")
+print(f"Groove: {results['rhythm']['groove_type']}")
+
+# Multiple selective analyses
+results = analyzer.analyze_file(
+    'song.wav',
+    detect_key=True,
+    comprehensive=False,
+    analyze_rhythm=True,
+    analyze_melody=True,
+    analyze_timbre=True
+)
+
+# Access selected analysis results
+print(f"Key: {results['basic_info']['key']}")
+print(f"Time: {results['rhythm']['time_signature']}")
+print(f"Instruments: {results['timbre']['dominant_instruments']}")
+print(f"Vocal Range: {results['melody_harmony']['melodic_range']}")
+
+# Available selective analysis parameters:
+#   analyze_rhythm=True    : Rhythm and time signature
+#   analyze_chords=True    : Chord progressions
+#   analyze_structure=True : Musical structure
+#   analyze_timbre=True    : Timbre and instruments
+#   analyze_melody=True    : Melody and harmony
+#   analyze_dynamics=True  : Dynamics
 ```
 
 #### Comprehensive Analysis (Detailed)
@@ -208,7 +281,7 @@ reference_sheet = analyzer.generate_reference_sheet(results)
 print(reference_sheet)
 ```
 
-#### Smart Parallel Processing (NEW!)
+#### Smart Parallel Processing
 ```python
 from bpm_detector import SmartParallelAudioAnalyzer
 
@@ -317,7 +390,7 @@ docker run --rm -v $(pwd):/workspace bpm-detector --help
 - `--max_bpm MAX_BPM`: Maximum BPM (default: 300.0)
 - `--start_bpm START_BPM`: Starting BPM (default: 150.0)
 
-#### Parallel Processing Options (NEW!)
+#### Parallel Processing Options
 - `--auto-parallel`: Enable automatic parallel optimization (default: enabled)
 - `--no-parallel`: Disable parallel processing
 - `--max-workers N`: Override automatic worker count
@@ -476,7 +549,7 @@ Comprehensive analysis is implemented as an optional feature for several reasons
 - seaborn >= 0.12.0
 - pandas >= 2.0.0
 
-### Parallel Processing Dependencies (NEW!)
+### Parallel Processing Dependencies
 - psutil >= 5.9.0 (system monitoring and resource management)
 
 ## Contributing
