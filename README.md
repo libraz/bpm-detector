@@ -6,6 +6,14 @@
 
 A comprehensive Python tool for automatic music analysis including BPM, key detection, and advanced music production features.
 
+## Related: libsonare
+
+The same author maintains **[libsonare](https://github.com/libraz/libsonare)** — a dependency-free audio DSP toolkit (C++ / Python / WASM, Apache-2.0) that ports the algorithms here to C++ and adds broadcast-grade mastering, mixing, and editing DSP. It is being developed into a headless DAW.
+
+🎵 **[Try the music analysis demo](https://libsonare.libraz.net/music-analysis.html)** — BPM, key, chord, and structure analysis running entirely in your browser. No install required. ([all demos](https://libsonare.libraz.net/demos.html))
+
+This project remains available as a stable, lightweight, MIT-licensed Python-only option for BPM/key detection. New development is focused on libsonare.
+
 ## Features
 
 ### Core Analysis

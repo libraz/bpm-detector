@@ -6,6 +6,14 @@
 
 音楽ファイルのBPM（テンポ）・キー（調）検出から包括的な楽曲解析まで対応した音楽制作支援ツールです。
 
+## 関連プロジェクト: libsonare
+
+同じ作者が **[libsonare](https://github.com/libraz/libsonare)** という依存ゼロのオーディオ DSP ツールキット（C++ / Python / WASM、Apache-2.0）も開発しています。本プロジェクトのアルゴリズムを C++ に移植し、放送品質のマスタリング・ミキシング・編集 DSP まで含めた拡張版で、ヘッドレス DAW として開発中です。
+
+🎵 **[音楽解析デモを試す](https://libsonare.libraz.net/music-analysis.html)** — BPM・キー・コード・構造解析をブラウザ上で完結して実行できます（インストール不要）。([デモ一覧](https://libsonare.libraz.net/demos.html))
+
+本プロジェクトは、軽量で MIT ライセンスの Python 専用版として BPM・キー検出を安定版として引き続き利用できます。新規開発は libsonare に注力しています。
+
 ## 機能
 
 ### 基本解析
