@@ -1,5 +1,5 @@
 # Use Python slim image for faster builds
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 # Install only runtime dependencies
 RUN apt-get update && apt-get install -y \
@@ -10,17 +10,19 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /app
 
-# Copy and install requirements first for better caching
-COPY requirements.txt ./
+# Install the locked dependencies first for better caching (the lock's editable self-reference is dropped)
+COPY requirements.lock ./
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    sed '/^-e /d' requirements.lock > /tmp/requirements.txt && \
+    pip install --no-cache-dir -r /tmp/requirements.txt && \
+    rm /tmp/requirements.txt
 
 # Copy source code
 COPY src/ ./src/
 COPY pyproject.toml LICENSE README.md ./
 
-# Install the package
-RUN pip install --no-cache-dir .
+# Install the package against the locked dependencies
+RUN pip install --no-cache-dir --no-deps .
 
 # Create non-root user
 RUN useradd --create-home --shell /bin/bash app
