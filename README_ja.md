@@ -1,8 +1,9 @@
 # BPM & Key Detector
 
+[![CI](https://img.shields.io/github/actions/workflow/status/libraz/bpm-detector/ci.yml?branch=main&label=CI)](https://github.com/libraz/bpm-detector/actions)
 [![codecov](https://codecov.io/gh/libraz/bpm-detector/branch/main/graph/badge.svg)](https://codecov.io/gh/libraz/bpm-detector)
-[![Python Version](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License](https://img.shields.io/badge/license-MIT-blue)](https://github.com/libraz/bpm-detector/blob/main/LICENSE)
+[![Python Version](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
 
 音楽ファイルのBPM（テンポ）・キー（調）検出から包括的な楽曲解析まで対応した音楽制作支援ツールです。
 
@@ -25,7 +26,7 @@
   - Krumhansl-Schmucklerキープロファイル使用
   - メジャー・マイナー両方に対応
   - クロマ特徴量ベースの解析
-  - 低信頼度時は `Unknown(E♭?)` 形式で候補表示
+  - 低信頼度時は `key` が `None` になり、暫定候補（例: `Unknown(E♭?)`）は `key_detection_details` に残る
 
 ### 包括的楽曲解析
 - **コード進行解析**: 自動和音検出とハーモニー解析
@@ -33,7 +34,7 @@
   - 機能和声分析（I-vi-IV-V）
   - 転調検出
   - コード複雑度スコア
-  - 7th・sus4コードを含む48クラス検出
+  - 全12ルートのメジャー・マイナー・7th・sus4コードを検出
 - **楽曲構造解析**: 自動セクション検出と楽曲形式分析
   - セクション境界（イントロ、Aメロ、サビ、ブリッジ）
   - 楽曲形式の識別（ABABCB）
@@ -94,9 +95,8 @@
   - 各解析モジュールの詳細プログレス
   - 時間推定とパフォーマンスメトリクス
   - タスクステータス付きインタラクティブプログレスバー
-- **パフォーマンス最適化**: 大幅な速度向上
-  - 中規模システム（4-7コア）で2-3倍高速
-  - 高性能システム（8+コア）で3-7倍高速
+- **パフォーマンス最適化**: 包括解析を複数コアに分散
+  - 実測値と再現手順は[パフォーマンスベンチマーク](#パフォーマンスベンチマーク)を参照
   - インテリジェントメモリ管理
   - ワークロードに基づくプロセス対スレッドプール選択
 
@@ -122,7 +122,7 @@
 - 🔧 [CI/CDステータス](https://github.com/libraz/bpm-detector/actions)
 - 📖 [ドキュメント](https://github.com/libraz/bpm-detector)
 - 🐛 [Issues](https://github.com/libraz/bpm-detector/issues)
-- 💡 [機能リクエスト](https://github.com/libraz/bpm-detector/issues/new?template=feature_request.md)
+- 💡 [機能リクエスト](https://github.com/libraz/bpm-detector/issues/new)
 
 ## インストール
 
@@ -174,7 +174,7 @@ bpm-detector --detect-key your_audio_file.wav
 # 複数ファイルの処理
 bpm-detector --detect-key *.wav *.mp3
 
-# 進捗表示を抑制
+# 進捗表示を抑制（-q）
 bpm-detector --quiet --detect-key your_audio_file.wav
 
 # 選択的解析 - 必要な情報だけを高速に解析
@@ -191,7 +191,7 @@ bpm-detector --rhythm --chords --structure your_audio_file.wav  # 複数の解�
 #   --melody    : メロディとハーモニーを解析
 #   --dynamics  : ダイナミクスを解析
 
-# 包括的解析（全機能）
+# 包括的解析（全解析。キー検出には別途 --detect-key が必要）
 bpm-detector --comprehensive your_audio_file.wav
 
 # 並列処理
@@ -304,13 +304,12 @@ def progress_callback(progress, message):
 results = analyzer.analyze_file(
     'song.wav',
     comprehensive=True,
-    progress_callback=progress_callback,
-    detailed_progress=True
+    progress_callback=progress_callback
 )
 
-# 並列処理による複数ファイル
+# 並列処理による複数ファイル（{パス: 結果} の辞書を返す）
 files = ['song1.wav', 'song2.wav', 'song3.wav']
-batch_results = analyzer.analyze_file(files, comprehensive=True)
+batch_results = analyzer.analyze_files(files, comprehensive=True)
 
 # 手動設定
 analyzer = SmartParallelAudioAnalyzer(
@@ -335,24 +334,26 @@ from bpm_detector import AudioAnalyzer, SmartParallelAudioAnalyzer
 traditional = AudioAnalyzer()
 parallel = SmartParallelAudioAnalyzer(auto_parallel=True)
 
-# 高速解析（0.1-0.7秒）
+# 基本解析
 start = time.time()
 basic_results = traditional.analyze_file('song.wav', comprehensive=False)
 print(f"基本解析: {time.time() - start:.2f}秒")
 
-# シーケンシャル包括的解析（2.5-15秒）
+# シーケンシャル包括的解析
 start = time.time()
 sequential_results = traditional.analyze_file('song.wav', comprehensive=True)
 sequential_time = time.time() - start
 print(f"シーケンシャル包括的解析: {sequential_time:.2f}秒")
 
-# 並列包括的解析（システムによって1-6秒）
+# 並列包括的解析
 start = time.time()
 parallel_results = parallel.analyze_file('song.wav', comprehensive=True)
 parallel_time = time.time() - start
 print(f"並列包括的解析: {parallel_time:.2f}秒")
 print(f"速度向上: {sequential_time/parallel_time:.2f}倍")
 ```
+
+実測値は[パフォーマンスベンチマーク](#パフォーマンスベンチマーク)を参照してください。
 
 ### Docker使用方法
 
@@ -365,8 +366,8 @@ docker pull ghcr.io/libraz/bpm-detector:latest
 # 音声ファイルで実行（音声ディレクトリをマウント）
 docker run --rm -v /path/to/your/audio:/workspace ghcr.io/libraz/bpm-detector:latest --detect-key audio.wav
 
-# インタラクティブモード
-docker run --rm -it -v /path/to/your/audio:/workspace ghcr.io/libraz/bpm-detector:latest
+# CLI のヘルプを表示（デフォルトのコマンド）
+docker run --rm ghcr.io/libraz/bpm-detector:latest
 ```
 
 ### 開発モード
@@ -391,13 +392,17 @@ docker run --rm -v $(pwd):/workspace bpm-detector --help
 
 #### 基本オプション
 - `--detect-key`: キー検出を有効にする
+- `--detect-modulation`: 時間経過に伴う転調を検出して表示（`--detect-key` が必要）
 - `--comprehensive`: 包括的楽曲解析を有効にする
-- `--quiet`: 進捗表示を抑制
+- `--quiet`, `-q`: 進捗表示を抑制
 - `--sr SR`: サンプリングレート（デフォルト: 22050）
 - `--hop HOP`: ホップ長（デフォルト: 128）
 - `--min_bpm MIN_BPM`: 最小BPM（デフォルト: 40.0）
 - `--max_bpm MAX_BPM`: 最大BPM（デフォルト: 300.0）
 - `--start_bpm START_BPM`: 開始BPM（デフォルト: 150.0）
+
+#### 選択的解析オプション
+- `--rhythm`, `--chords`, `--structure`, `--timbre`, `--melody`, `--dynamics`: 指定した解析だけを実行（組み合わせ可。`--comprehensive` はすべてを有効にする）
 
 #### 並列処理オプション
 - `--auto-parallel`: 自動並列最適化を有効にする（デフォルト: 有効）
@@ -410,69 +415,94 @@ docker run --rm -v $(pwd):/workspace bpm-detector --help
 ```python
 analyzer.analyze_file(
     path='song.wav',
-    detect_key=True,           # キー検出を有効
-    comprehensive=True,        # 全高度機能を有効
-    min_bpm=40.0,             # 最小BPM範囲
-    max_bpm=300.0,            # 最大BPM範囲
-    start_bpm=150.0,          # 開始BPM推定値
-    progress_callback=None     # プログレスコールバック関数
+    detect_key=True,           # キー検出を有効（デフォルト: True）
+    detect_modulation=False,   # 転調を results['modulation_analysis'] に格納（detect_key が必要）
+    comprehensive=True,        # 全高度機能を有効（デフォルト: True）
+    min_bpm=40.0,              # 最小BPM範囲
+    max_bpm=300.0,             # 最大BPM範囲
+    start_bpm=150.0,           # 開始BPM推定値
+    progress_callback=None,    # プログレスコールバック関数
+    analyze_rhythm=False,      # 選択的解析（comprehensive=False のときに使用）
+    analyze_chords=False,
+    analyze_structure=False,
+    analyze_timbre=False,
+    analyze_melody=False,
+    analyze_dynamics=False,
 )
 ```
+
+API では `detect_key` と `comprehensive` のデフォルトが `True` です（CLI ではどちらも指定時のみ有効）。BPM とキーだけを素早く求める場合は `comprehensive=False` を渡してください。
 
 ## 出力例
 
 ### 基本解析出力
 ```
-example.wav
-  > BPM Candidates Top10
-  * 120.00 BPM : 45
-    240.00 BPM : 23
-     60.00 BPM : 18
-    180.00 BPM : 12
-    ...
-  > Estimated BPM : 120.00 BPM  (conf 78.3%)
-  > Estimated Key : C Major  (conf 85.2%)
+song.mp3
+  > Estimated BPM : 132.50 BPM  (conf 98.4%)
+  > Estimated Key : F# Major  (conf 62.4%)
 ```
 
 ### 包括的解析出力
 ```
-example.wav
-  > BPM: 120.0, キー: C Major, 長さ: 180.0秒
-  > コード進行: C → Am → F → G (I-vi-IV-V)
-  > 構造: イントロ-Aメロ-サビ-Aメロ-サビ-ブリッジ-サビ (ABABCB)
-  > リズム: 4/4拍子, ストレートグルーヴ, 中程度のシンコペーション
-  > 楽器: ピアノ主体, ギター, ドラム
-  > エネルギー: 中レベル, 2分30秒でクライマックス
+song.mp3
+  > Duration: 262.1s, BPM: 132.5, Key: F# Major
+  > Chord Progression: F# → C# → F# → D#m
+  > Structure: IARBARBARBCAC (13 sections)
+  > Section Details (13 sections):
+    1. Intro (00:00, 3bars, mid E, mid C)
+    2. Verse(A-melo) (00:05, 15bars, mid E, mid C)
+    3. Pre_Chorus(B-melo) (00:32, 15bars, mid E, mid C)
+    4. Chorus(Sabi) (00:59, 9bars, mid E, mid C)
+    ...
+  > Rhythm: 4/4 time, straight groove
+  > Instruments: vocals, piano, guitar
+  > Timbre: Brightness 0.6, Warmth 1.0
+  > Melody: 64.9% coverage, 4.4 octave range
+  > Full Range: D#2 - G#6 (Tenor)
+  > Vocal Range: C#3 - G#5 (Tenor)
+  > Harmony: 77.3% consonance, 68.4% complexity
+  > Dynamics: 80.0dB range, 44.5% variation
+
+  > Estimated BPM : 132.50 BPM  (conf 98.4%)
+  > Estimated Key : F# Major  (conf 62.4%)
 ```
 
-### 参考資料例
+### 参考資料例（抜粋）
+出力は英語です。
+
 ```markdown
-# 楽曲制作参考資料
+# Music Production Reference Sheet
 
-## 基本情報
-- **テンポ**: 120.0 BPM
-- **キー**: C Major
-- **拍子**: 4/4
-- **長さ**: 180秒
+## Basic Information
+- **Tempo**: 120.0 BPM
+- **Key**: C Major
+- **Time Signature**: 4/4
+- **Duration**: 180 seconds
 
-## ハーモニー・コード進行
-- **メインコード進行**: C - Am - F - G
-- **コード複雑度**: 65.0%
-- **ハーモニックリズム**: 2.0 変化/秒
+## Song Structure
+- **Section Count**: 7
+- **Structural Complexity**: 0.6
+- **Repetition Ratio**: 57.1%
 
-## 制作ノート
-- アレンジ密度: 中程度
-- プロダクションスタイル: ロックポップ
-- ミックス特徴: 明るいミックス, パンチの効いたドラム
+## Harmony & Chord Progression
+- **Main Chord Progression**: C - Am - F - G
+- **Chord Complexity**: 65.0%
+- **Harmonic Rhythm**: 2.0 changes/sec
 
-## 参考タグ
-アップビート, メジャーキー, ピアノ主体, ギター主体, 中エネルギー
+...
+
+## Production Notes
+- Arrangement Density: medium
+- Production Style: rock_pop
+- Mix Characteristics: bright_mix, punchy_drums
+
+## Reference Tags
+upbeat, major-key, piano-driven, guitar-driven, mid-energy
 ```
 
 注意: 実際のCLI出力にはカラーが含まれます：
 - ファイル名は明るいシアンで表示
-- セクションヘッダー（"> BPM Candidates"）は黄色
-- 選択されたBPM候補（*）は緑色
+- 各解析の要約行はカテゴリごとに色分け（青、マゼンタ、シアン、黄色）
 - 最終推定値は明るい緑色（BPM）とマゼンタ（キー）
 
 ## パフォーマンス・技術詳細
@@ -480,20 +510,33 @@ example.wav
 ### パフォーマンスベンチマーク
 
 #### シーケンシャル対並列処理
+
+計測環境は macOS 26.6（arm64、論理18コア）、Python 3.12.9。ハーネスが生成する
+合成コード進行のクリップを対象に、ウォームアップ後に1回ずつ計測しているため、
+librosa の初回 JIT コンパイル時間は含みません。
+
 | 音声長 | 基本解析 | シーケンシャル包括的解析 | 並列包括的解析 | 並列速度向上 |
 |--------|----------|-------------------------|----------------|--------------|
-| 5秒    | 0.7秒    | 2.5秒                   | 1.2秒          | 2.1倍        |
-| 10秒   | 0.1秒    | 4.9秒                   | 2.0秒          | 2.5倍        |
-| 20秒   | 0.2秒    | 9.9秒                   | 3.8秒          | 2.6倍        |
-| 30秒   | 0.3秒    | 15.0秒                  | 5.5秒          | 2.7倍        |
+| 5秒    | 0.3秒    | 3.3秒                   | 2.6秒          | 1.3倍        |
+| 10秒   | 0.7秒    | 6.8秒                   | 5.1秒          | 1.3倍        |
+| 20秒   | 1.3秒    | 13.3秒                  | 10.5秒         | 1.3倍        |
+| 30秒   | 1.9秒    | 20.0秒                  | 15.6秒         | 1.3倍        |
 
-#### システムパフォーマンス影響
-| システムタイプ | CPUコア数 | 並列速度向上 | メモリ使用量 | 推奨設定 |
-|----------------|-----------|--------------|--------------|----------|
-| ハイエンド     | 8-16      | 3.0-4.0倍    | 1-2GB        | 自動並列有効 |
-| ミドルレンジ   | 4-7       | 2.0-3.0倍    | 512MB-1GB    | 自動並列有効 |
-| ローエンド     | 2-3       | 1.2-1.8倍    | 256-512MB    | 保守的並列 |
-| シングルコア   | 1         | 1.0倍        | 256MB        | シーケンシャルのみ |
+解析時間はクリップ長に比例します。並列化の効きはコア数ではなく分割できない
+モジュールで頭打ちになるため、数コアを超えて増やしてもほとんど縮みません。
+手元で再現するには `python examples/benchmark_table.py` を実行してください。
+
+#### 自動並列化の設定
+`AutoParallelConfig` は論理コア数と現在の負荷から戦略を選びます：
+
+| 論理コア数 | 戦略 | ワーカー数 | プール |
+|------------|------|------------|--------|
+| 8以上      | 積極的並列 | コア数 − 2 | プロセス |
+| 4-7        | バランス並列（高負荷時は2ワーカーの保守的並列） | 最大8 | スレッド |
+| 2-3        | 保守的並列（高負荷時・メモリ不足時はシーケンシャル） | 最大3 | スレッド |
+| 1          | シーケンシャルのみ | 1 | — |
+
+実際に選ばれる設定は `bpm-detector --show-system-info` で確認できます。
 
 **推奨事項**:
 - リアルタイムアプリケーションには`comprehensive=False`を使用
@@ -527,39 +570,20 @@ example.wav
 ### 包括的解析がオプションである理由
 包括的解析は以下の理由でオプション機能として実装されています：
 
-1. **パフォーマンス**: 高度解析により大幅な計算負荷増加（3-45倍遅い）
+1. **パフォーマンス**: 高度解析により計算負荷が増加（上表では基本解析のおよそ10倍）
 2. **用途**: DJミキシング、テンポマッチング、基本解析のみが必要な場合が多い
 3. **処理時間**: バッチ処理時、詳細機能が不要な場合は高速な基本解析を選択可能
 4. **柔軟性**: 要件に応じて速度と機能の完全性のバランスを調整可能
 
 ## プロジェクト統計
 
-- **テストカバレッジ**: 全15モジュールをカバーする100以上のテストを含む包括的テストスイート
-- **対応Python**: 3.12以上
-- **Dockerイメージサイズ**: 約1.6GB
-- **ビルド時間**: 約4分
-- **対応フォーマット**: WAV, MP3, FLAC, M4A, OGG
-- **解析機能**: 15つの包括的モジュール + 類似度エンジン
+- **テスト**: 全解析モジュールにわたる400以上のテスト
+- **対応Python**: 3.12以上（CI は 3.12 と 3.14 で実行）
+- **対応フォーマット**: WAV, MP3, FLAC, OGG は libsndfile で読み込み。M4A などその他の形式には FFmpeg が必要（Docker イメージには同梱）
 
 ## 依存関係
 
-### コア依存関係
-- librosa >= 0.11.0
-- soundfile >= 0.13.1
-- numpy >= 2.2.6
-- tqdm >= 4.67.1
-- audioread >= 3.0.1
-- colorama >= 0.4.6
-
-### 高度解析依存関係
-- scikit-learn >= 1.3.0
-- scipy >= 1.11.0
-- matplotlib >= 3.7.0
-- seaborn >= 0.12.0
-- pandas >= 2.0.0
-
-### 並列処理依存関係
-- psutil >= 5.9.0（システム監視とリソース管理）
+Python 3.12 以上が必要です。実行時の依存とその最小バージョンは [`pyproject.toml`](pyproject.toml) に、検証済みの組み合わせは `requirements.lock` に記載しています。
 
 ## コントリビューション
 

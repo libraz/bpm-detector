@@ -1,8 +1,9 @@
 # BPM & Key Detector
 
+[![CI](https://img.shields.io/github/actions/workflow/status/libraz/bpm-detector/ci.yml?branch=main&label=CI)](https://github.com/libraz/bpm-detector/actions)
 [![codecov](https://codecov.io/gh/libraz/bpm-detector/branch/main/graph/badge.svg)](https://codecov.io/gh/libraz/bpm-detector)
-[![Python Version](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License](https://img.shields.io/badge/license-MIT-blue)](https://github.com/libraz/bpm-detector/blob/main/LICENSE)
+[![Python Version](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
 
 A comprehensive Python tool for automatic music analysis including BPM, key detection, and advanced music production features.
 
@@ -25,7 +26,7 @@ This project remains available as a stable, lightweight, MIT-licensed Python-onl
   - Uses Krumhansl-Schmuckler key profiles
   - Supports both major and minor keys
   - Chroma feature-based analysis
-  - Returns fallback as `Unknown(E♭?)` when confidence is low
+  - When confidence is low, `key` is `None` and the tentative candidate (e.g. `Unknown(E♭?)`) is kept in `key_detection_details`
 
 ### Advanced Music Analysis
 - **Chord Progression Analysis**: Automatic chord detection and harmonic analysis
@@ -33,7 +34,7 @@ This project remains available as a stable, lightweight, MIT-licensed Python-onl
   - Functional harmony analysis (I-vi-IV-V)
   - Modulation detection
   - Chord complexity scoring
-  - Detects 7th and sus4 chords (48-class model)
+  - Detects major, minor, 7th, and sus4 chords on all 12 roots
 - **Song Structure Analysis**: Automatic section detection and form analysis
   - Section boundaries (intro, verse, chorus, bridge)
   - Song form identification (ABABCB)
@@ -93,9 +94,8 @@ This project remains available as a stable, lightweight, MIT-licensed Python-onl
   - Detailed progress for each analysis module
   - Time estimation and performance metrics
   - Interactive progress bars with task status
-- **Performance Optimization**: Significant speed improvements
-  - 2-3x faster on medium systems (4-7 cores)
-  - 3-7x faster on high-performance systems (8+ cores)
+- **Performance Optimization**: Comprehensive analysis spread across cores
+  - Measured figures and how to reproduce them: [Performance Benchmarks](#performance-benchmarks)
   - Intelligent memory management
   - Process vs thread pool selection based on workload
 
@@ -121,7 +121,7 @@ This project remains available as a stable, lightweight, MIT-licensed Python-onl
 - 🔧 [CI/CD Status](https://github.com/libraz/bpm-detector/actions)
 - 📖 [Documentation](https://github.com/libraz/bpm-detector)
 - 🐛 [Issues](https://github.com/libraz/bpm-detector/issues)
-- 💡 [Feature Requests](https://github.com/libraz/bpm-detector/issues/new?template=feature_request.md)
+- 💡 [Feature Requests](https://github.com/libraz/bpm-detector/issues/new)
 
 ## Installation
 
@@ -173,7 +173,7 @@ bpm-detector --detect-key your_audio_file.wav
 # Multiple files
 bpm-detector --detect-key *.wav *.mp3
 
-# Suppress progress output
+# Suppress progress output (-q)
 bpm-detector --quiet --detect-key your_audio_file.wav
 
 # Selective analysis - Analyze only what you need for faster results
@@ -190,7 +190,7 @@ bpm-detector --rhythm --chords --structure your_audio_file.wav  # Multiple analy
 #   --melody    : Analyze melody and harmony
 #   --dynamics  : Analyze dynamics
 
-# Comprehensive analysis (all features)
+# Comprehensive analysis (all analyses; key detection still needs --detect-key)
 bpm-detector --comprehensive your_audio_file.wav
 
 # Parallel processing
@@ -303,13 +303,12 @@ def progress_callback(progress, message):
 results = analyzer.analyze_file(
     'song.wav',
     comprehensive=True,
-    progress_callback=progress_callback,
-    detailed_progress=True
+    progress_callback=progress_callback
 )
 
-# Multiple files with parallel processing
+# Multiple files with parallel processing (returns {path: results})
 files = ['song1.wav', 'song2.wav', 'song3.wav']
-batch_results = analyzer.analyze_file(files, comprehensive=True)
+batch_results = analyzer.analyze_files(files, comprehensive=True)
 
 # Manual configuration
 analyzer = SmartParallelAudioAnalyzer(
@@ -334,24 +333,26 @@ from bpm_detector import AudioAnalyzer, SmartParallelAudioAnalyzer
 traditional = AudioAnalyzer()
 parallel = SmartParallelAudioAnalyzer(auto_parallel=True)
 
-# Fast analysis (0.1-0.7 seconds)
+# Basic analysis
 start = time.time()
 basic_results = traditional.analyze_file('song.wav', comprehensive=False)
 print(f"Basic analysis: {time.time() - start:.2f}s")
 
-# Sequential comprehensive analysis (2.5-15 seconds)
+# Sequential comprehensive analysis
 start = time.time()
 sequential_results = traditional.analyze_file('song.wav', comprehensive=True)
 sequential_time = time.time() - start
 print(f"Sequential comprehensive: {sequential_time:.2f}s")
 
-# Parallel comprehensive analysis (1-6 seconds depending on system)
+# Parallel comprehensive analysis
 start = time.time()
 parallel_results = parallel.analyze_file('song.wav', comprehensive=True)
 parallel_time = time.time() - start
 print(f"Parallel comprehensive: {parallel_time:.2f}s")
 print(f"Speedup: {sequential_time/parallel_time:.2f}x")
 ```
+
+Measured timings are in [Performance Benchmarks](#performance-benchmarks).
 
 ### Docker Usage
 
@@ -364,8 +365,8 @@ docker pull ghcr.io/libraz/bpm-detector:latest
 # Run with audio files (mount your audio directory)
 docker run --rm -v /path/to/your/audio:/workspace ghcr.io/libraz/bpm-detector:latest --detect-key audio.wav
 
-# Interactive mode
-docker run --rm -it -v /path/to/your/audio:/workspace ghcr.io/libraz/bpm-detector:latest
+# Show CLI help (the default command)
+docker run --rm ghcr.io/libraz/bpm-detector:latest
 ```
 
 ### Development Mode
@@ -390,13 +391,17 @@ docker run --rm -v $(pwd):/workspace bpm-detector --help
 
 #### Basic Options
 - `--detect-key`: Enable key detection
+- `--detect-modulation`: Detect key changes over time and print each modulation (requires `--detect-key`)
 - `--comprehensive`: Enable comprehensive music analysis
-- `--quiet`: Suppress progress output
+- `--quiet`, `-q`: Suppress progress output
 - `--sr SR`: Sample rate (default: 22050)
 - `--hop HOP`: Hop length (default: 128)
 - `--min_bpm MIN_BPM`: Minimum BPM (default: 40.0)
 - `--max_bpm MAX_BPM`: Maximum BPM (default: 300.0)
 - `--start_bpm START_BPM`: Starting BPM (default: 150.0)
+
+#### Selective Analysis Options
+- `--rhythm`, `--chords`, `--structure`, `--timbre`, `--melody`, `--dynamics`: Run only the selected analyses (combinable; `--comprehensive` enables all of them)
 
 #### Parallel Processing Options
 - `--auto-parallel`: Enable automatic parallel optimization (default: enabled)
@@ -409,42 +414,59 @@ docker run --rm -v $(pwd):/workspace bpm-detector --help
 ```python
 analyzer.analyze_file(
     path='song.wav',
-    detect_key=True,           # Enable key detection
-    comprehensive=True,        # Enable all advanced features
-    min_bpm=40.0,             # Minimum BPM range
-    max_bpm=300.0,            # Maximum BPM range
-    start_bpm=150.0,          # Starting BPM estimate
-    progress_callback=None     # Progress callback function
+    detect_key=True,           # Enable key detection (default: True)
+    detect_modulation=False,   # Key changes over time in results['modulation_analysis'] (requires detect_key)
+    comprehensive=True,        # Enable all advanced features (default: True)
+    min_bpm=40.0,              # Minimum BPM range
+    max_bpm=300.0,             # Maximum BPM range
+    start_bpm=150.0,           # Starting BPM estimate
+    progress_callback=None,    # Progress callback function
+    analyze_rhythm=False,      # Selective analyses (used when comprehensive=False)
+    analyze_chords=False,
+    analyze_structure=False,
+    analyze_timbre=False,
+    analyze_melody=False,
+    analyze_dynamics=False,
 )
 ```
+
+`detect_key` and `comprehensive` default to `True` in the API, unlike the CLI where both are opt-in. Pass `comprehensive=False` for a fast BPM/key-only run.
 
 ## Output Examples
 
 ### Basic Analysis Output
 ```
-example.wav
-  > BPM Candidates Top10
-  * 120.00 BPM : 45
-    240.00 BPM : 23
-     60.00 BPM : 18
-    180.00 BPM : 12
-    ...
-  > Estimated BPM : 120.00 BPM  (conf 78.3%)
-  > Estimated Key : C Major  (conf 85.2%)
+song.mp3
+  > Estimated BPM : 132.50 BPM  (conf 98.4%)
+  > Estimated Key : F# Major  (conf 62.4%)
 ```
 
 ### Comprehensive Analysis Output
 ```
-example.wav
-  > BPM: 120.0, Key: C Major, Duration: 180.0s
-  > Chord Progression: C → Am → F → G (I-vi-IV-V)
-  > Structure: Intro-Verse-Chorus-Verse-Chorus-Bridge-Chorus (ABABCB)
-  > Rhythm: 4/4 time, straight groove, moderate syncopation
-  > Instruments: Piano-driven, guitar, drums
-  > Energy: Mid-level, climax at 2:30
+song.mp3
+  > Duration: 262.1s, BPM: 132.5, Key: F# Major
+  > Chord Progression: F# → C# → F# → D#m
+  > Structure: IARBARBARBCAC (13 sections)
+  > Section Details (13 sections):
+    1. Intro (00:00, 3bars, mid E, mid C)
+    2. Verse(A-melo) (00:05, 15bars, mid E, mid C)
+    3. Pre_Chorus(B-melo) (00:32, 15bars, mid E, mid C)
+    4. Chorus(Sabi) (00:59, 9bars, mid E, mid C)
+    ...
+  > Rhythm: 4/4 time, straight groove
+  > Instruments: vocals, piano, guitar
+  > Timbre: Brightness 0.6, Warmth 1.0
+  > Melody: 64.9% coverage, 4.4 octave range
+  > Full Range: D#2 - G#6 (Tenor)
+  > Vocal Range: C#3 - G#5 (Tenor)
+  > Harmony: 77.3% consonance, 68.4% complexity
+  > Dynamics: 80.0dB range, 44.5% variation
+
+  > Estimated BPM : 132.50 BPM  (conf 98.4%)
+  > Estimated Key : F# Major  (conf 62.4%)
 ```
 
-### Reference Sheet Example
+### Reference Sheet Example (excerpt)
 ```markdown
 # Music Production Reference Sheet
 
@@ -454,10 +476,17 @@ example.wav
 - **Time Signature**: 4/4
 - **Duration**: 180 seconds
 
+## Song Structure
+- **Section Count**: 7
+- **Structural Complexity**: 0.6
+- **Repetition Ratio**: 57.1%
+
 ## Harmony & Chord Progression
 - **Main Chord Progression**: C - Am - F - G
 - **Chord Complexity**: 65.0%
 - **Harmonic Rhythm**: 2.0 changes/sec
+
+...
 
 ## Production Notes
 - Arrangement Density: medium
@@ -470,8 +499,7 @@ upbeat, major-key, piano-driven, guitar-driven, mid-energy
 
 Note: The actual CLI output includes colors:
 - File names are displayed in bright cyan
-- Section headers ("> BPM Candidates") in yellow
-- Selected BPM candidates (*) in green
+- Analysis summary lines are colored by category (blue, magenta, cyan, yellow)
 - Final estimates in bright green (BPM) and magenta (Key)
 
 ## Performance & Technical Details
@@ -479,20 +507,34 @@ Note: The actual CLI output includes colors:
 ### Performance Benchmarks
 
 #### Sequential vs Parallel Processing
+
+Measured on macOS 26.6 (arm64, 18 logical cores) with Python 3.12.9, on the
+synthetic chord-progression clips the harness generates. Times are a single run
+after a warmup pass, so they exclude librosa's first-call JIT compilation.
+
 | Audio Length | Basic Analysis | Sequential Comprehensive | Parallel Comprehensive | Parallel Speedup |
 |--------------|----------------|-------------------------|------------------------|------------------|
-| 5 seconds    | 0.7s          | 2.5s                   | 1.2s                   | 2.1x             |
-| 10 seconds   | 0.1s          | 4.9s                   | 2.0s                   | 2.5x             |
-| 20 seconds   | 0.2s          | 9.9s                   | 3.8s                   | 2.6x             |
-| 30 seconds   | 0.3s          | 15.0s                  | 5.5s                   | 2.7x             |
+| 5 seconds    | 0.3s          | 3.3s                   | 2.6s                   | 1.3x             |
+| 10 seconds   | 0.7s          | 6.8s                   | 5.1s                   | 1.3x             |
+| 20 seconds   | 1.3s          | 13.3s                  | 10.5s                  | 1.3x             |
+| 30 seconds   | 1.9s          | 20.0s                  | 15.6s                  | 1.3x             |
 
-#### System Performance Impact
-| System Type | CPU Cores | Parallel Speedup | Memory Usage | Recommended Settings |
-|-------------|-----------|------------------|--------------|---------------------|
-| High-end    | 8-16      | 3.0-4.0x        | 1-2GB        | Auto-parallel enabled |
-| Mid-range   | 4-7       | 2.0-3.0x        | 512MB-1GB    | Auto-parallel enabled |
-| Low-end     | 2-3       | 1.2-1.8x        | 256-512MB    | Conservative parallel |
-| Single-core | 1         | 1.0x            | 256MB        | Sequential only |
+Analysis time scales with clip length, and the parallel speedup is bounded by
+the modules that cannot be split rather than by core count — adding cores past
+a handful buys little. Reproduce the table on your own machine with
+`python examples/benchmark_table.py`.
+
+#### Auto-Parallel Configuration
+`AutoParallelConfig` picks a strategy from the logical core count and the current load:
+
+| Logical Cores | Strategy | Workers | Pool |
+|---------------|----------|---------|------|
+| 8+            | Aggressive parallel | cores − 2 | Process |
+| 4-7           | Balanced parallel (conservative with 2 workers under high load) | up to 8 | Thread |
+| 2-3           | Conservative parallel (sequential under load or low memory) | up to 3 | Thread |
+| 1             | Sequential only | 1 | — |
+
+Run `bpm-detector --show-system-info` to see what it selects on your machine.
 
 **Recommendations**:
 - Use `comprehensive=False` for real-time applications
@@ -526,39 +568,20 @@ Note: The actual CLI output includes colors:
 ### Why Comprehensive Analysis is Optional
 Comprehensive analysis is implemented as an optional feature for several reasons:
 
-1. **Performance**: Advanced analysis adds significant computational overhead (3-45x slower)
+1. **Performance**: Advanced analysis adds significant computational overhead — roughly 10x the basic run in the table above
 2. **Use Cases**: Many users only need BPM/key for DJ mixing, tempo matching, or basic analysis
 3. **Processing Time**: For batch processing, users can choose faster basic analysis when detailed features aren't needed
 4. **Flexibility**: Allows users to balance between speed and feature completeness based on requirements
 
 ## Project Stats
 
-- **Test Coverage**: Comprehensive test suite with 100+ tests covering all 15 modules
-- **Supported Python**: 3.12+
-- **Docker Image Size**: ~1.6GB
-- **Build Time**: ~4 minutes
-- **Supported Formats**: WAV, MP3, FLAC, M4A, OGG
-- **Analysis Features**: 15 comprehensive modules + similarity engine
+- **Tests**: 400+ tests across every analysis module
+- **Supported Python**: 3.12+ (CI runs 3.12 and 3.14)
+- **Supported Formats**: WAV, MP3, FLAC, OGG via libsndfile; M4A and other formats need FFmpeg installed (included in the Docker image)
 
 ## Dependencies
 
-### Core Dependencies
-- librosa >= 0.11.0
-- soundfile >= 0.13.1
-- numpy >= 2.2.6
-- tqdm >= 4.67.1
-- audioread >= 3.0.1
-- colorama >= 0.4.6
-
-### Advanced Analysis Dependencies
-- scikit-learn >= 1.3.0
-- scipy >= 1.11.0
-- matplotlib >= 3.7.0
-- seaborn >= 0.12.0
-- pandas >= 2.0.0
-
-### Parallel Processing Dependencies
-- psutil >= 5.9.0 (system monitoring and resource management)
+Requires Python 3.12 or later. Runtime dependencies and their minimum versions are declared in [`pyproject.toml`](pyproject.toml), and the tested set is pinned in `requirements.lock`.
 
 ## Contributing
 
