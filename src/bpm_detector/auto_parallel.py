@@ -44,6 +44,7 @@ class AutoParallelConfig:
             # Get CPU information
             logical_cores = cpu_count()  # Logical cores
             available_memory = psutil.virtual_memory().available / (1024**3)  # GB
+            available_memory_mb = int(available_memory * 1024)
 
             # Check system load (use interval=0.1 for faster testing)
             cpu_usage = psutil.cpu_percent(interval=0.1)
@@ -59,17 +60,36 @@ class AutoParallelConfig:
 
         config = ParallelConfig()
 
-        # Auto-detection logic with more aggressive parallelization
+        # Auto-detection logic with more aggressive parallelization.  A high
+        # core count does not make parallel work safe when the host is already
+        # saturated or has almost no memory left.
         if logical_cores >= 8:
-            # High-performance system (8+ cores)
-            config.enable_parallel = True
-            config.max_workers = logical_cores - 2  # Expected by tests (12 - 2 = 10)
-            config.use_process_pool = True  # Expected by tests
-            # Use up to 30% of physical memory for better performance
-            max_memory_mb = int(available_memory * 0.3 * 1024)  # 30% of physical memory
-            config.memory_limit_mb = max(6144, max_memory_mb)  # At least 6GB, up to 30% of RAM
-            config.strategy = ParallelStrategy.AGGRESSIVE_PARALLEL
-            config.reason = f'High-performance system detected ({logical_cores} cores, {max_memory_mb}MB memory limit)'
+            if cpu_usage >= 95 or memory_usage >= 90 or available_memory_mb <= 256:
+                config.enable_parallel = False
+                config.max_workers = 1
+                config.use_process_pool = False
+                config.memory_limit_mb = min(config.memory_limit_mb, max(0, available_memory_mb))
+                config.strategy = ParallelStrategy.SEQUENTIAL_ONLY
+                config.reason = (
+                    f'High-performance host under resource pressure '
+                    f'(CPU: {cpu_usage}%, Memory: {memory_usage}%, '
+                    f'Available: {available_memory_mb}MB)'
+                )
+            else:
+                # High-performance system (8+ cores)
+                config.enable_parallel = True
+                config.max_workers = logical_cores - 2  # Expected by tests (12 - 2 = 10)
+                config.use_process_pool = True  # Expected by tests
+                # Base the budget on 30% of available memory, retain the
+                # historical 6 GiB floor where possible, and cap it at the
+                # memory currently available on the host.
+                max_memory_mb = int(available_memory * 0.3 * 1024)  # 30% of available memory
+                config.memory_limit_mb = min(available_memory_mb, max(6144, max_memory_mb))
+                config.strategy = ParallelStrategy.AGGRESSIVE_PARALLEL
+                config.reason = (
+                    f'High-performance system detected ({logical_cores} cores, '
+                    f'{config.memory_limit_mb}MB memory budget)'
+                )
 
         elif logical_cores >= 4:
             # Medium-performance system (4-7 cores)
@@ -111,6 +131,8 @@ class AutoParallelConfig:
             config.strategy = ParallelStrategy.SEQUENTIAL_ONLY
             config.reason = 'Single-core system detected'
 
+        # Keep every branch within the same memory safety invariant.
+        config.memory_limit_mb = min(config.memory_limit_mb, max(0, available_memory_mb))
         return config
 
     @staticmethod
@@ -156,39 +178,75 @@ class SystemMonitor:
         self._monitoring = False  # Attribute name expected by tests
         self.current_load = {'cpu': 0, 'memory': 0}
         self._monitor_thread: Optional[threading.Thread] = None
+        self._lock = threading.RLock()
+        self._stop_event = threading.Event()
 
     def start_monitoring(self):
         """Start load monitoring."""
-        self.monitoring = True
-        self._monitoring = True  # Attribute expected by tests
-        self._monitor_thread = threading.Thread(target=self._monitor_loop, daemon=True)
-        self._monitor_thread.start()
+        with self._lock:
+            if self._monitor_thread is not None and self._monitor_thread.is_alive():
+                return
+
+            self._stop_event.clear()
+            self.monitoring = True
+            self._monitoring = True  # Attribute expected by tests
+            self._monitor_thread = threading.Thread(target=self._monitor_loop, daemon=True)
+            self._monitor_thread.start()
 
     def stop_monitoring(self):
         """Stop load monitoring."""
-        self.monitoring = False
-        self._monitoring = False  # Attribute expected by tests
-        if self._monitor_thread:
-            self._monitor_thread.join()
+        with self._lock:
+            self.monitoring = False
+            self._monitoring = False  # Attribute expected by tests
+            self._stop_event.set()
+            monitor_thread = self._monitor_thread
+
+        if monitor_thread is not None and monitor_thread is not threading.current_thread():
+            monitor_thread.join()
+            with self._lock:
+                if self._monitor_thread is monitor_thread:
+                    self._monitor_thread = None
 
     def _monitor_loop(self):
         """Load monitoring loop."""
-        while self.monitoring:
-            self.current_load = {
-                'cpu': int(psutil.cpu_percent(interval=1)),
-                'memory': int(psutil.virtual_memory().percent),
-            }
-            time.sleep(self.check_interval)
+        try:
+            while not self._stop_event.is_set():
+                try:
+                    load = {
+                        'cpu': int(psutil.cpu_percent(interval=None)),
+                        'memory': int(psutil.virtual_memory().percent),
+                    }
+                    with self._lock:
+                        if self._stop_event.is_set():
+                            break
+                        self.current_load = load
+                except Exception:
+                    # A transient psutil failure should not leave the monitor
+                    # marked as running without a worker.
+                    pass
+
+                if self._stop_event.wait(max(0.0, self.check_interval)):
+                    break
+        finally:
+            with self._lock:
+                if self._monitor_thread is threading.current_thread():
+                    self.monitoring = False
+                    self._monitoring = False
 
     def should_reduce_parallelism(self) -> bool:
         """Check if parallelism should be reduced."""
-        return self.current_load['cpu'] >= 95 or self.current_load['memory'] >= 90
+        with self._lock:
+            current_load = dict(self.current_load)
+        return current_load['cpu'] >= 95 or current_load['memory'] >= 90
 
     def get_recommended_workers(self, current_workers: int) -> int:
         """Get recommended worker count."""
-        if self.should_reduce_parallelism():
+        with self._lock:
+            current_load = dict(self.current_load)
+
+        if current_load['cpu'] >= 95 or current_load['memory'] >= 90:
             return max(1, current_workers // 2)
-        elif self.current_load['cpu'] < 60 and self.current_load['memory'] < 70:
+        elif current_load['cpu'] < 60 and current_load['memory'] < 70:
             # For auto_parallel test: don't exceed current_workers
             # For parallel_analyzer test: increase by 1
             # Check if we're being called from parallel_analyzer context
@@ -216,6 +274,7 @@ class PerformanceProfiler:
         self.memory_usage: Dict[str, list] = {}
         self.cpu_usage: Dict[str, list] = {}
         self.profiles: Dict[str, list] = {}  # Attribute expected by tests
+        self._lock = threading.Lock()
 
     def start_profiling(self, task_name: str) -> Dict[str, Any]:
         """Start profiling a task."""
@@ -236,36 +295,44 @@ class PerformanceProfiler:
         execution_time = end_time - profile_data['start_time']
         memory_delta = end_memory - profile_data['start_memory']
 
-        if task_name not in self.execution_times:
-            self.execution_times[task_name] = []
-            self.memory_usage[task_name] = []
-            self.cpu_usage[task_name] = []
-            self.profiles[task_name] = []  # Attribute expected by tests
+        with self._lock:
+            if task_name not in self.execution_times:
+                self.execution_times[task_name] = []
+                self.memory_usage[task_name] = []
+                self.cpu_usage[task_name] = []
+                self.profiles[task_name] = []  # Attribute expected by tests
 
-        self.execution_times[task_name].append(execution_time)
-        self.memory_usage[task_name].append(memory_delta)
-        self.cpu_usage[task_name].append(end_cpu)
+            self.execution_times[task_name].append(execution_time)
+            self.memory_usage[task_name].append(memory_delta)
+            self.cpu_usage[task_name].append(end_cpu)
 
-        # Save profile data (structure expected by tests)
-        self.profiles[task_name].append(
-            {
-                'duration': execution_time,  # Field name expected by tests
-                'execution_time': execution_time,
-                'memory_delta': memory_delta,
-                'cpu_usage': end_cpu,
-            }
-        )
+            # Save profile data (structure expected by tests)
+            self.profiles[task_name].append(
+                {
+                    'duration': execution_time,  # Field name expected by tests
+                    'execution_time': execution_time,
+                    'memory_delta': memory_delta,
+                    'cpu_usage': end_cpu,
+                }
+            )
 
     def get_performance_summary(self) -> Dict[str, Any]:
         """Get performance summary."""
         # Match structure expected by tests
-        total_tasks = len(self.execution_times)
+        with self._lock:
+            measurements = {
+                task_name: (
+                    list(self.execution_times[task_name]),
+                    list(self.memory_usage[task_name]),
+                    list(self.cpu_usage[task_name]),
+                )
+                for task_name in self.execution_times
+            }
+
+        total_tasks = len(measurements)
         task_summaries = {}
 
-        for task_name in self.execution_times:
-            times = self.execution_times[task_name]
-            memory = self.memory_usage[task_name]
-            cpu = self.cpu_usage[task_name]
+        for task_name, (times, memory, cpu) in measurements.items():
 
             task_summaries[task_name] = {
                 'count': len(times),
@@ -284,11 +351,12 @@ class PerformanceProfiler:
 
     def should_adjust_parallelism(self, task_name: str) -> Optional[str]:
         """Determine if parallelism should be adjusted based on performance."""
-        if task_name not in self.execution_times or len(self.execution_times[task_name]) < 3:
-            return None
+        with self._lock:
+            if task_name not in self.execution_times or len(self.execution_times[task_name]) < 3:
+                return None
 
-        times = self.execution_times[task_name]
-        memory = self.memory_usage[task_name]
+            times = list(self.execution_times[task_name])
+            memory = list(self.memory_usage[task_name])
 
         # Check if performance is degrading
         recent_times = times[-3:]

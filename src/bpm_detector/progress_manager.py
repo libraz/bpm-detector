@@ -2,7 +2,7 @@
 
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
@@ -39,6 +39,7 @@ class ProgressManager:
         self._overall_progress = 0.0
         self._debug = debug
         self._start_time = time.time()
+        self._last_notify_time: Optional[float] = None
 
     def register_task(self, task_id: str, name: str):
         """Register a new task."""
@@ -66,15 +67,28 @@ class ProgressManager:
 
     def complete_task(self, task_id: str, success: bool = True, error: Optional[str] = None):
         """Mark task as completed."""
+        changed = False
         with self._lock:
             if task_id in self._tasks:
                 task = self._tasks[task_id]
-                task.status = TaskStatus.COMPLETED if success else TaskStatus.FAILED
-                task.progress = 100.0 if success else task.progress
-                task.end_time = time.time()
-                if error:
-                    task.error = error
-        self._notify_update()
+                new_status = TaskStatus.COMPLETED if success else TaskStatus.FAILED
+                new_progress = 100.0 if success else task.progress
+                changed = (
+                    task.status != new_status
+                    or task.progress != new_progress
+                    or (error is not None and task.error != error)
+                )
+                if changed:
+                    task.status = new_status
+                    task.progress = new_progress
+                    task.end_time = time.time()
+                    if error is not None:
+                        task.error = error
+        # Completion is a state transition and must not be swallowed by the
+        # ordinary progress-update throttle.  Repeating the same terminal
+        # state is a no-op so callbacks can safely make terminal calls.
+        if changed:
+            self._notify_update(force=True)
 
     def get_overall_progress(self) -> float:
         """Calculate overall progress."""
@@ -125,24 +139,33 @@ class ProgressManager:
             return [task.name for task in self._tasks.values() if task.status == TaskStatus.RUNNING]
 
     def get_task_details(self) -> Dict[str, TaskProgress]:
-        """Get detailed task information."""
+        """Get a snapshot of detailed task information.
+
+        Callers may keep or annotate the returned dataclasses without racing
+        with workers or mutating the manager's live state.
+        """
         with self._lock:
-            return self._tasks.copy()
+            return {task_id: replace(task) for task_id, task in self._tasks.items()}
 
     def add_callback(self, callback: Callable):
         """Add progress update callback."""
-        self._callbacks.append(callback)
+        with self._lock:
+            self._callbacks.append(callback)
 
-    def _notify_update(self):
+    def _notify_update(self, force: bool = False):
         """Notify all callbacks of progress update."""
         # Prevent infinite loops with update throttling
-        current_time = time.time()
-        if hasattr(self, '_last_notify_time'):
-            if current_time - self._last_notify_time < 0.1:  # 100ms throttle for smooth updates
-                return
-        self._last_notify_time: float = current_time
+        with self._lock:
+            current_time = time.time()
+            if not force and self._last_notify_time is not None:
+                if current_time - self._last_notify_time < 0.1:  # 100ms throttle for smooth updates
+                    return
+            self._last_notify_time = current_time
+            callbacks = list(self._callbacks)
 
-        for callback in self._callbacks:
+        # Run user code after releasing the manager lock.  Callbacks commonly
+        # query status or schedule another progress update.
+        for callback in callbacks:
             try:
                 callback(self)
             except Exception as e:
@@ -151,8 +174,10 @@ class ProgressManager:
     def reset(self):
         """Reset all tasks."""
         with self._lock:
+            changed = bool(self._tasks)
             self._tasks.clear()
-        self._notify_update()
+        if changed:
+            self._notify_update(force=True)
 
 
 class ProgressDisplay:
@@ -197,18 +222,15 @@ class SimpleProgressDisplay(ProgressDisplay):
         self._updating: bool = True
 
         try:
-            # Get progress data without triggering callbacks
-            with progress_manager._lock:
-                overall_progress = (
-                    sum(task.progress for task in progress_manager._tasks.values()) / len(progress_manager._tasks)
-                    if progress_manager._tasks
-                    else 0
-                )
-                running_tasks = [
-                    task.name for task in progress_manager._tasks.values() if task.status == TaskStatus.RUNNING
-                ]
-                completed = sum(1 for task in progress_manager._tasks.values() if task.status == TaskStatus.COMPLETED)
-                total = len(progress_manager._tasks)
+            # Read an immutable-in-practice snapshot so display formatting
+            # never holds the manager lock or mutates live task objects.
+            task_details = progress_manager.get_task_details()
+            overall_progress = (
+                sum(task.progress for task in task_details.values()) / len(task_details) if task_details else 0
+            )
+            running_tasks = [task.name for task in task_details.values() if task.status == TaskStatus.RUNNING]
+            completed = sum(1 for task in task_details.values() if task.status == TaskStatus.COMPLETED)
+            total = len(task_details)
 
             # Only update if progress changed significantly (reduced threshold for smoother updates)
             if abs(overall_progress - self.last_progress) < 0.2:
@@ -270,9 +292,9 @@ class DetailedProgressDisplay(ProgressDisplay):
         self._updating: bool = True
 
         try:
-            # Get progress data without triggering callbacks
-            with progress_manager._lock:
-                task_details = progress_manager._tasks.copy()
+            # Read a snapshot; estimated progress is rendered locally and
+            # never written back into worker-owned task state.
+            task_details = progress_manager.get_task_details()
 
             # Update estimated progress for running tasks
             current_time = time.time()
@@ -290,7 +312,8 @@ class DetailedProgressDisplay(ProgressDisplay):
                     if task.progress < 95:  # Don't override near-completion progress
                         time_based_progress = min(95, (elapsed / estimated_duration) * 100)
                         if time_based_progress > task.progress:
-                            task.progress = time_based_progress
+                            task_details[task_id] = replace(task, progress=time_based_progress)
+                            task = task_details[task_id]
 
             # Calculate overall progress
             overall_progress = (

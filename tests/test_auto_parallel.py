@@ -1,5 +1,6 @@
 """Tests for auto parallel module."""
 
+import threading
 import time
 import unittest
 from unittest.mock import MagicMock, patch
@@ -129,6 +130,104 @@ class TestAutoParallelConfig(unittest.TestCase):
         self.assertIsInstance(config.max_workers, int)
         self.assertGreater(config.max_workers, 0)
 
+    @patch('src.bpm_detector.auto_parallel.psutil')
+    @patch('src.bpm_detector.auto_parallel.cpu_count')
+    def test_high_performance_config_respects_resource_pressure(self, mock_cpu_count, mock_psutil):
+        """High core counts must not force parallel work into a saturated host."""
+        mock_cpu_count.return_value = 16
+        memory = MagicMock()
+        memory.available = 128 * 1024**2
+        memory.percent = 98.0
+        mock_psutil.virtual_memory.return_value = memory
+        mock_psutil.cpu_percent.return_value = 99.0
+
+        config = AutoParallelConfig.get_optimal_config()
+
+        self.assertFalse(config.enable_parallel)
+        self.assertEqual(config.max_workers, 1)
+        self.assertLessEqual(config.memory_limit_mb, 128)
+
+    @patch('src.bpm_detector.auto_parallel.psutil')
+    @patch('src.bpm_detector.auto_parallel.cpu_count')
+    def test_high_performance_config_respects_cpu_pressure_threshold(self, mock_cpu_count, mock_psutil):
+        """High core counts must use the monitor's 95% CPU safety threshold."""
+        mock_cpu_count.return_value = 16
+        memory = MagicMock()
+        memory.available = 16 * 1024**3
+        memory.percent = 10.0
+        mock_psutil.virtual_memory.return_value = memory
+        mock_psutil.cpu_percent.return_value = 95.0
+
+        config = AutoParallelConfig.get_optimal_config()
+
+        self.assertFalse(config.enable_parallel)
+        self.assertEqual(config.max_workers, 1)
+
+    @patch('src.bpm_detector.auto_parallel.psutil')
+    @patch('src.bpm_detector.auto_parallel.cpu_count')
+    def test_high_performance_config_respects_memory_pressure_threshold(self, mock_cpu_count, mock_psutil):
+        """High core counts must use the monitor's 90% memory safety threshold."""
+        mock_cpu_count.return_value = 16
+        memory = MagicMock()
+        memory.available = 16 * 1024**3
+        memory.percent = 90.0
+        mock_psutil.virtual_memory.return_value = memory
+        mock_psutil.cpu_percent.return_value = 10.0
+
+        config = AutoParallelConfig.get_optimal_config()
+
+        self.assertFalse(config.enable_parallel)
+        self.assertEqual(config.max_workers, 1)
+
+    @patch('src.bpm_detector.auto_parallel.psutil')
+    @patch('src.bpm_detector.auto_parallel.cpu_count')
+    def test_high_performance_reason_reports_applied_memory_limit(self, mock_cpu_count, mock_psutil):
+        """The reason must describe the effective, clamped memory limit."""
+        mock_cpu_count.return_value = 12
+        memory = MagicMock()
+        memory.available = 16 * 1024**3
+        memory.percent = 10.0
+        mock_psutil.virtual_memory.return_value = memory
+        mock_psutil.cpu_percent.return_value = 10.0
+
+        config = AutoParallelConfig.get_optimal_config()
+
+        self.assertIn(f'{config.memory_limit_mb}MB memory budget', config.reason)
+
+    @patch('src.bpm_detector.auto_parallel.psutil')
+    @patch('src.bpm_detector.auto_parallel.cpu_count')
+    def test_high_performance_config_respects_available_memory_floor(self, mock_cpu_count, mock_psutil):
+        """A high core count with less than 256 MiB available must stay safe."""
+        mock_cpu_count.return_value = 16
+        memory = MagicMock()
+        memory.available = 255 * 1024**2
+        memory.percent = 20.0
+        mock_psutil.virtual_memory.return_value = memory
+        mock_psutil.cpu_percent.return_value = 20.0
+
+        config = AutoParallelConfig.get_optimal_config()
+
+        self.assertFalse(config.enable_parallel)
+        self.assertEqual(config.max_workers, 1)
+        self.assertLessEqual(config.memory_limit_mb, 255)
+
+    @patch('src.bpm_detector.auto_parallel.psutil')
+    @patch('src.bpm_detector.auto_parallel.cpu_count')
+    def test_high_performance_config_respects_available_memory_boundary(self, mock_cpu_count, mock_psutil):
+        """Exactly 256 MiB available must remain on the safe sequential path."""
+        mock_cpu_count.return_value = 16
+        memory = MagicMock()
+        memory.available = 256 * 1024**2
+        memory.percent = 20.0
+        mock_psutil.virtual_memory.return_value = memory
+        mock_psutil.cpu_percent.return_value = 10.0
+
+        config = AutoParallelConfig.get_optimal_config()
+
+        self.assertFalse(config.enable_parallel)
+        self.assertEqual(config.max_workers, 1)
+        self.assertLessEqual(config.memory_limit_mb, 256)
+
 
 class TestSystemMonitor(unittest.TestCase):
     """Test cases for SystemMonitor."""
@@ -210,6 +309,28 @@ class TestSystemMonitor(unittest.TestCase):
 
             self.monitor.stop_monitoring()
             self.assertFalse(self.monitor._monitoring)
+
+    @patch('src.bpm_detector.auto_parallel.psutil.virtual_memory')
+    @patch('src.bpm_detector.auto_parallel.psutil.cpu_percent', return_value=10.0)
+    def test_duplicate_start_is_idempotent_and_long_wait_stops_fast(self, _cpu_percent, virtual_memory):
+        """Starting twice must keep one worker and stop must interrupt its wait."""
+        virtual_memory.return_value.percent = 10.0
+        monitor = SystemMonitor(check_interval=0.5)
+
+        monitor.start_monitoring()
+        thread = monitor._monitor_thread
+        monitor.start_monitoring()
+
+        self.assertIs(monitor._monitor_thread, thread)
+        started = time.monotonic()
+        monitor.stop_monitoring()
+        elapsed = time.monotonic() - started
+
+        self.assertLess(elapsed, 0.25)
+        self.assertFalse(monitor._monitoring)
+        self.assertIsNotNone(thread)
+        self.assertFalse(thread.is_alive())
+        self.assertIsNone(monitor._monitor_thread)
 
 
 class TestPerformanceProfiler(unittest.TestCase):
@@ -373,6 +494,36 @@ class TestPerformanceProfiler(unittest.TestCase):
 
         # Should record both profiles
         profiles = self.profiler.profiles["concurrent_task"]
+        self.assertEqual(len(profiles), 2)
+
+    def test_same_name_initialization_is_atomic(self):
+        """Concurrent first writes for one task must not overwrite a profile."""
+
+        class YieldingDict(dict):
+            def __contains__(self, key):
+                present = super().__contains__(key)
+                if not present:
+                    # Make the old check-then-initialize sequence yield while
+                    # preserving normal dictionary semantics.
+                    time.sleep(0.01)
+                return present
+
+        self.profiler.execution_times = YieldingDict()
+        barrier = threading.Barrier(2)
+
+        def record_profile():
+            profile = self.profiler.start_profiling("same_task")
+            barrier.wait()
+            self.profiler.end_profiling(profile)
+
+        workers = [threading.Thread(target=record_profile) for _ in range(2)]
+        for worker in workers:
+            worker.start()
+        for worker in workers:
+            worker.join(timeout=2)
+            self.assertFalse(worker.is_alive())
+
+        profiles = self.profiler.profiles["same_task"]
         self.assertEqual(len(profiles), 2)
 
 
