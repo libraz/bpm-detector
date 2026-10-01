@@ -248,15 +248,15 @@ class DynamicsAnalyzer:
         else:
             # Generate profile by averaging over windows
             profile = []
-            time_points = []
+            time_list = []
             for i in range(0, len(rms), window_frames):
                 window_end = min(i + window_frames, len(rms))
                 window_energy = np.mean(rms[i:window_end])
                 profile.append(window_energy)
-                time_points.append(i * self.hop_length / sr)
+                time_list.append(i * self.hop_length / sr)
 
             energy_curve = np.array(profile)
-            time_points = np.array(time_points)
+            time_points = np.array(time_list)
 
             # Normalize to 0-1 scale
             if np.max(energy_curve) > 0:
@@ -314,8 +314,8 @@ class DynamicsAnalyzer:
             smoothed_rms, height=peak_threshold, distance=int(5 * sr / self.hop_length)  # Minimum 5 seconds apart
         )
 
-        climax_times = []
-        climax_energies = []
+        climax_time_list = []
+        climax_energy_list = []
 
         for peak_idx in energy_peaks:
             # Calculate time
@@ -332,11 +332,11 @@ class DynamicsAnalyzer:
             else:
                 combined_intensity = intensity
 
-            climax_times.append(time_seconds)
-            climax_energies.append(combined_intensity)
+            climax_time_list.append(time_seconds)
+            climax_energy_list.append(combined_intensity)
 
-        climax_times = np.array(climax_times)
-        climax_energies = np.array(climax_energies)
+        climax_times = np.array(climax_time_list)
+        climax_energies = np.array(climax_energy_list)
 
         # Find main climax (highest energy)
         if len(climax_energies) > 0:

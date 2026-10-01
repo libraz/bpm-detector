@@ -50,8 +50,10 @@ class TimbreFeatureExtractor:
 
         features['spectral_rolloff'] = librosa.feature.spectral_rolloff(S=magnitude, sr=sr, hop_length=self.hop_length)
 
+        contrast_fmin = min(200.0, sr / 4.0)
+        contrast_bands = min(6, max(1, int(np.ceil(np.log2((sr / 2.0) / contrast_fmin)))))
         features['spectral_contrast'] = librosa.feature.spectral_contrast(
-            S=magnitude, sr=sr, hop_length=self.hop_length
+            S=magnitude, sr=sr, hop_length=self.hop_length, fmin=contrast_fmin, n_bands=contrast_bands
         )
 
         features['spectral_flatness'] = librosa.feature.spectral_flatness(S=magnitude, hop_length=self.hop_length)
@@ -160,7 +162,7 @@ class TimbreFeatureExtractor:
             roughness *= 1.3
 
         # Ensure we don't hit the ceiling too easily
-        roughness = min(0.85, roughness)
+        roughness = max(0.0, min(0.85, roughness))
 
         return float(roughness)
 
@@ -279,8 +281,8 @@ class TimbreFeatureExtractor:
         else:
             texture['harmonic_richness'] = 0.0
 
-        # Temporal stability (expected by tests)
-        rms = features.get('rms', np.array([]))
+        # Temporal stability
+        rms = np.asarray(features.get('rms', np.array([]))).reshape(-1)
         if len(rms) > 1:
             texture['temporal_stability'] = float(1.0 - min(1.0, float(np.std(rms)) / float(np.mean(rms + 1e-8))))
         else:

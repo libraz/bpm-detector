@@ -390,28 +390,11 @@ class MelodyAnalyzer:
         else:
             interval_distribution = {interval: 0.0 for interval in INTERVALS.values()}
 
-        # Add categories that tests expect
-        small_intervals = sum(
-            count
-            for interval, count in interval_distribution.items()
-            if interval in ['unison', 'minor_second', 'major_second']
-        )
-        medium_intervals = sum(
-            count
-            for interval, count in interval_distribution.items()
-            if interval in ['minor_third', 'major_third', 'perfect_fourth', 'tritone']
-        )
-        large_intervals = sum(
-            count
-            for interval, count in interval_distribution.items()
-            if interval in ['perfect_fifth', 'minor_sixth', 'major_sixth', 'minor_seventh', 'major_seventh', 'octave']
-        )
-
-        # Also count intervals larger than octave as large intervals
-        for interval_size in intervals:
-            semitone = int(round(interval_size))
-            if semitone >= 12:  # Octave or larger
-                large_intervals += 1 / total_intervals if total_intervals > 0 else 0
+        # Size categories count each interval once, including compound intervals.
+        semitones = np.rint(intervals).astype(int)
+        small_intervals = float(np.mean(semitones <= 2))
+        medium_intervals = float(np.mean((semitones >= 3) & (semitones <= 6)))
+        large_intervals = float(np.mean(semitones >= 7))
 
         interval_distribution.update(
             {
@@ -449,7 +432,18 @@ class MelodyAnalyzer:
         pitch_stability = 1.0 / (1.0 + pitch_cv)
 
         # Detect vibrato
-        vibrato_rate, vibrato_extent = self._detect_vibrato(voiced_f0)
+        times = melody.get('times')
+        if times is not None and len(times) == len(f0) and len(times) > 1:
+            frame_interval = float(np.median(np.diff(times)))
+            if frame_interval > 0 and np.isfinite(frame_interval):
+                # Pauses must not become adjacent samples in the autocorrelation.
+                edges = np.flatnonzero(np.diff(np.r_[False, voiced_flag, False]))
+                start, end = max(zip(edges[::2], edges[1::2]), key=lambda pair: pair[1] - pair[0])
+                vibrato_rate, vibrato_extent = self._detect_vibrato(f0[start:end], 1.0 / frame_interval)
+            else:
+                vibrato_rate, vibrato_extent = 0.0, 0.0
+        else:
+            vibrato_rate, vibrato_extent = self._detect_vibrato(voiced_f0)
 
         # Calculate pitch drift (long-term trend)
         pitch_drift = self._calculate_pitch_drift(voiced_f0)
@@ -461,7 +455,7 @@ class MelodyAnalyzer:
             'pitch_drift': float(pitch_drift),
         }
 
-    def _detect_vibrato(self, f0: np.ndarray) -> Tuple[float, float]:
+    def _detect_vibrato(self, f0: np.ndarray, frame_rate: float = 0.0) -> Tuple[float, float]:
         """Detect vibrato characteristics.
 
         Args:
@@ -489,11 +483,8 @@ class MelodyAnalyzer:
         # Estimate vibrato rate (first significant peak)
         vibrato_period = peaks[0] if len(peaks) > 0 else 0
 
-        # Convert period to frequency
-        # For a signal of length N sampled over time T, the frequency is:
-        # f = (sample_rate / hop_length) / period_in_samples
-        # For test data: 100 samples over 2 seconds = 50 Hz sample rate
-        sample_rate_effective = len(f0) / 2.0  # 100 samples / 2 seconds = 50 Hz
+        # Keep the legacy two-second convention for direct calls without a time axis.
+        sample_rate_effective = frame_rate if frame_rate > 0 else len(f0) / 2.0
         vibrato_rate = sample_rate_effective / (vibrato_period + 1e-8) if vibrato_period > 0 else 0.0
         vibrato_rate = min(10.0, vibrato_rate)  # Cap at reasonable value
 

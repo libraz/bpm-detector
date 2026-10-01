@@ -56,7 +56,8 @@ class RhythmAnalyzer:
 
         # Tempo and beats
         tempo_raw, beats = librosa.beat.beat_track(y=y, sr=sr, hop_length=self.hop_length)
-        tempo_value = float(tempo_raw) if np.isscalar(tempo_raw) else 120.0
+        tempo_values = np.asarray(tempo_raw)
+        tempo_value = float(tempo_values.flat[0]) if tempo_values.size else 120.0
         features['tempo'] = np.array([tempo_value])
         features['beat_frames'] = beats
         features['beat_times'] = librosa.frames_to_time(beats, sr=sr, hop_length=self.hop_length)

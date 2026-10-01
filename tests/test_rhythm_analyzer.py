@@ -1,6 +1,7 @@
 """Tests for rhythm analyzer."""
 
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 
@@ -62,6 +63,17 @@ class TestRhythmAnalyzer(unittest.TestCase):
         # Check beat times are sorted
         beat_times = features['beat_times']
         self.assertTrue(np.all(np.diff(beat_times) >= 0))
+
+    @patch('src.bpm_detector.rhythm_analyzer.librosa.beat.beat_track')
+    def test_extract_onset_features_preserves_ndarray_tempo(self, mock_beat_track):
+        """The tempo returned as a one-element ndarray must not fall back to 120 BPM."""
+        mock_beat_track.return_value = (np.array([90.0]), np.array([0, 16, 32]))
+        clicks = np.zeros(self.sr * 2, dtype=np.float32)
+        clicks[:: int(self.sr * 60 / 90)] = 1.0
+
+        features = self.analyzer.extract_onset_features(clicks, self.sr)
+
+        np.testing.assert_allclose(features['tempo'], np.array([90.0]))
 
     def test_detect_time_signature(self):
         """Test time signature detection."""

@@ -90,3 +90,29 @@ class TestTimbreFeatureExtractor(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+def test_constant_contrast_roughness_stays_in_range():
+    extractor = TimbreFeatureExtractor()
+    for contrast in (np.zeros((7, 20)), np.ones((7, 20))):
+        roughness = extractor.analyze_roughness(contrast)
+        assert np.isfinite(roughness)
+        assert 0 <= roughness <= 1
+
+
+def test_texture_uses_rms_time_axis():
+    extractor = TimbreFeatureExtractor()
+    steady = extractor.analyze_texture({'rms': np.ones((1, 10))})
+    changing = extractor.analyze_texture({'rms': np.array([[0.0, 1.0] * 5])})
+    assert changing['temporal_stability'] < steady['temporal_stability']
+
+
+def test_timbral_features_support_low_sample_rates():
+    from src.bpm_detector.timbre_analyzer import TimbreAnalyzer
+
+    for sr in (8000, 16000, 22050):
+        y = (0.2 * np.sin(2 * np.pi * 440 * np.arange(sr) / sr)).astype(np.float32)
+        features = TimbreFeatureExtractor().extract_timbral_features(y, sr)
+        assert np.isfinite(features['spectral_contrast']).all()
+        result = TimbreAnalyzer().analyze(y, sr)
+        assert 0 <= result['roughness'] <= 1

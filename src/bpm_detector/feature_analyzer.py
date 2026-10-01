@@ -108,6 +108,8 @@ class FeatureAnalyzer:
             # Tempo and rhythm
             tempo, beats = librosa.beat.beat_track(y=segment, sr=sr, hop_length=self.hop_length)
             rhythmic_density = len(beats) / (len(segment) / sr) if len(segment) > 0 else 0
+            tempo_values = np.asarray(tempo)
+            tempo_value = float(tempo_values.flat[0]) if tempo_values.size else 120.0
 
             # MFCC features
             mfcc = librosa.feature.mfcc(y=segment, sr=sr, n_mfcc=13, hop_length=self.hop_length)
@@ -122,7 +124,7 @@ class FeatureAnalyzer:
                 'spectral_complexity': float(spectral_complexity),
                 'harmonic_content': float(harmonic_ratio),
                 'rhythmic_density': float(rhythmic_density),
-                'tempo': float(tempo) if np.isscalar(tempo) else 120.0,
+                'tempo': tempo_value,
                 'mfcc_mean': mfcc_mean.tolist(),
                 'mfcc_var': mfcc_var.tolist(),
                 'segment_length': len(segment),

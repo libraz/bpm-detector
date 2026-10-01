@@ -359,3 +359,26 @@ class TestMelodyAnalyzer(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+def test_compound_intervals_counted_once():
+    analyzer = MelodyAnalyzer()
+    for semitones in (12, 14, 19, 23, 24):
+        result = analyzer.analyze_interval_distribution({'clean_melody': np.array([60.0, 60.0 + semitones])})
+        assert result['small_intervals'] == 0.0
+        assert result['medium_intervals'] == 0.0
+        assert result['large_intervals'] == 1.0
+
+
+def test_vibrato_uses_actual_frame_times_and_voiced_blocks():
+    analyzer = MelodyAnalyzer()
+    for duration in (1, 2, 4):
+        times = np.arange(int(duration * 22050 / 512)) * 512 / 22050
+        f0 = 440 + 10 * np.sin(2 * np.pi * 5 * times)
+        voiced = np.ones(len(f0), dtype=bool)
+        result = analyzer.analyze_pitch_stability({'f0': f0, 'voiced_flag': voiced, 'times': times})
+        assert abs(result['vibrato_rate'] - 5.0) < 0.5, result
+    # Separate equal-duration voiced blocks around a pause must retain their time scale.
+    voiced[40:80] = False
+    result = analyzer.analyze_pitch_stability({'f0': f0, 'voiced_flag': voiced, 'times': times})
+    assert abs(result['vibrato_rate'] - 5.0) < 0.5, result
