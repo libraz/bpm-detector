@@ -1,6 +1,7 @@
 """Tests for chord progression analyzer."""
 
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 
@@ -245,6 +246,99 @@ class TestChordProgressionAnalyzer(unittest.TestCase):
             self.assertGreaterEqual(confidence, 0.0)
             self.assertLessEqual(confidence, 1.0)
 
+    def test_detect_chords_handles_short_c_and_am_chroma(self):
+        """A chroma window shorter than the nominal bar window is still analyzed."""
+        analyzer = ChordProgressionAnalyzer(hop_length=10)
+        chord_vectors = {'C': [1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0], 'Am': [1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0]}
+
+        for expected_name, vector in chord_vectors.items():
+            with self.subTest(chord=expected_name):
+                chroma = np.repeat(np.asarray(vector, dtype=float)[:, None], 4, axis=1)
+                chords = analyzer.detect_chords(chroma, bpm=120.0, sr=100)
+
+                self.assertTrue(chords)
+                self.assertEqual(chords[0][0], expected_name)
+                self.assertEqual((chords[0][2], chords[0][3]), (0, 4))
+
+    def test_detect_chords_includes_partial_tail_window(self):
+        """The final partial window must contribute a chord detection."""
+        analyzer = ChordProgressionAnalyzer(hop_length=10)
+        c_major = np.array([1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0], dtype=float)
+        a_minor = np.array([1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0], dtype=float)
+        chroma = np.column_stack([*([c_major] * 20), *([a_minor] * 3)])
+
+        chords = analyzer.detect_chords(chroma, bpm=120.0, sr=100)
+
+        self.assertEqual([chord[0] for chord in chords], ['C', 'Am'])
+        self.assertEqual((chords[0][2], chords[0][3]), (0, 20))
+        self.assertEqual((chords[1][2], chords[1][3]), (20, 23))
+        self.assertEqual(chords[-1][3], chroma.shape[1])
+
+    def test_detect_chords_normalizes_overlapping_alternating_windows(self):
+        """Overlapping evidence is clipped into chronological, bounded intervals."""
+        analyzer = ChordProgressionAnalyzer(hop_length=10)
+        chroma = np.ones((12, 100))
+        alternating = [('C', 0.9), ('Am', 0.9)] * 5
+
+        with patch.object(analyzer, '_match_chord_template', side_effect=alternating):
+            chords = analyzer.detect_chords(chroma, bpm=120.0, sr=100)
+
+        self.assertEqual(len(chords), len(alternating))
+        self.assertTrue(all(0 <= start < end <= chroma.shape[1] for _, _, start, end in chords))
+        self.assertTrue(all(previous[3] <= current[2] for previous, current in zip(chords, chords[1:])))
+        self.assertEqual(chords[-1][3], chroma.shape[1])
+
+        progression = analyzer.analyze_progression(chords, sr=100)
+        self.assertAlmostEqual(progression['harmonic_rhythm'], 1.0)
+
+    def test_detect_chords_handles_short_c_and_am_signals(self):
+        """Short synthetic chord signals should reach the detector."""
+        analyzer = ChordProgressionAnalyzer()
+        sr = 22050
+        t = np.arange(int(sr * 0.25)) / sr
+        chord_frequencies = {'C': (261.63, 329.63, 392.0), 'Am': (220.0, 261.63, 329.63)}
+
+        for expected_name, frequencies in chord_frequencies.items():
+            with self.subTest(chord=expected_name):
+                signal = sum(np.sin(2 * np.pi * frequency * t) for frequency in frequencies)
+                chroma = analyzer.extract_chroma_features(signal, sr)
+                chords = analyzer.detect_chords(chroma, bpm=120.0, sr=sr)
+
+                self.assertTrue(chords)
+                self.assertEqual(chords[0][0], expected_name)
+
+    def test_functional_analysis_supports_flat_roots_and_compound_suffixes(self):
+        """Flat spellings and major/minor suffixes map to the right degree."""
+        chords = ['Ebmaj7', 'Bb7', 'Am7', 'Cmaj7']
+
+        self.assertEqual(self.analyzer.functional_analysis(chords, 'C Major'), ['bIII', 'bVII', 'vi', 'I'])
+        self.assertEqual(self.analyzer.functional_analysis(['Bbmaj7', 'Eb', 'F7'], 'Bb Major'), ['I', 'IV', 'V'])
+        self.assertEqual(self.analyzer.functional_analysis(['Eb', 'Bb'], 'C Minor'), ['bIII', 'bVII'])
+
+    def test_merge_consecutive_chords_uses_frame_gap(self):
+        """A sample hop length must not bridge a large frame-index gap."""
+        analyzer = ChordProgressionAnalyzer(hop_length=512)
+
+        small_gap = [('C', 0.9, 0, 10), ('C', 0.8, 15, 20)]
+        large_gap = [('C', 0.9, 0, 10), ('C', 0.8, 500, 510)]
+
+        self.assertEqual(len(analyzer._merge_consecutive_chords(small_gap)), 1)
+        self.assertEqual(len(analyzer._merge_consecutive_chords(large_gap)), 2)
+
 
 if __name__ == '__main__':
     unittest.main()
+
+
+def test_interval_normalization_drops_zero_length_segments():
+    analyzer = ChordProgressionAnalyzer()
+    source = [('C', 0.9, 0, 20), ('Am', 0.9, 0, 10)]
+    result = analyzer._normalize_chord_intervals(source, 20)
+    assert result
+    assert all(start < end for _, _, start, end in result)
+
+
+def test_invalid_interval_does_not_truncate_valid_chord():
+    analyzer = ChordProgressionAnalyzer()
+    result = analyzer._normalize_chord_intervals([('C', 0.9, 0, 20), ('Am', 0.9, 10, 10)], 20)
+    assert result == [('C', 0.9, 0, 20)]

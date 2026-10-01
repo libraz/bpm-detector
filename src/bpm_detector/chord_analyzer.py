@@ -174,8 +174,12 @@ class ChordProgressionAnalyzer:
 
         detected_chords = []
 
-        for i in range(0, n_frames - window_size + 1, step_size):
+        # Include a final partial window so short inputs and tails are not
+        # silently discarded.  The end bound keeps every mean non-empty.
+        for i in range(0, n_frames, step_size):
             end_frame = min(i + window_size, n_frames)
+            if end_frame <= i:
+                continue
 
             # Average chroma over the window
             window_chroma = np.mean(chroma[:, i:end_frame], axis=1)
@@ -193,7 +197,7 @@ class ChordProgressionAnalyzer:
         # Very relaxed merging to preserve chord diversity
         chords = self._merge_consecutive_chords(detected_chords, 0.50)  # Very relaxed threshold
 
-        return chords
+        return self._normalize_chord_intervals(chords, n_frames)
 
     def _match_chord_template(self, chroma_frame: np.ndarray) -> Tuple[str, float]:
         """Match chroma frame to chord templates with improved triad/tetrad separation.
@@ -221,8 +225,8 @@ class ChordProgressionAnalyzer:
         tetrad_candidates = []
 
         # Template matching with triad/tetrad separation
-        for chord_name, template in self.CHORD_TEMPLATES.items():
-            template = np.array(template, dtype=np.float32)
+        for chord_name, template_values in self.CHORD_TEMPLATES.items():
+            template = np.array(template_values, dtype=np.float32)
 
             # Improved correlation calculation (cosine similarity)
             chroma_norm = np.linalg.norm(chroma_frame)
@@ -315,16 +319,20 @@ class ChordProgressionAnalyzer:
         if not chords:
             return []
 
+        ordered_chords = sorted(chords, key=lambda chord: (chord[2], chord[3]))
         merged = []
-        current_chord = chords[0]
+        current_chord = ordered_chords[0]
 
-        for i in range(1, len(chords)):
-            next_chord = chords[i]
+        for i in range(1, len(ordered_chords)):
+            next_chord = ordered_chords[i]
 
             # More restrictive merging: only merge if confidence is high enough
+            # Chord positions are frame indices, so use a small frame-based
+            # tolerance instead of adding hop_length (which is in samples).
+            frame_gap = next_chord[2] - current_chord[3]
             should_merge = (
                 current_chord[0] == next_chord[0]
-                and next_chord[2] <= current_chord[3] + self.hop_length
+                and frame_gap <= 5
                 and min(current_chord[1], next_chord[1]) > merge_threshold
             )
 
@@ -345,6 +353,30 @@ class ChordProgressionAnalyzer:
         merged.append(current_chord)
 
         return merged
+
+    def _normalize_chord_intervals(
+        self, chords: List[Tuple[str, float, int, int]], n_frames: int
+    ) -> List[Tuple[str, float, int, int]]:
+        """Return sorted, bounded, non-overlapping chord intervals."""
+        normalized: List[Tuple[str, float, int, int]] = []
+
+        for chord, confidence, start, end in sorted(chords, key=lambda item: (item[2], item[3])):
+            bounded_start = max(0, min(int(start), n_frames))
+            bounded_end = max(0, min(int(end), n_frames))
+            if bounded_start >= bounded_end:
+                continue
+
+            if normalized and bounded_start < normalized[-1][3]:
+                previous = normalized[-1]
+                clipped_previous = (previous[0], previous[1], previous[2], bounded_start)
+                if clipped_previous[2] < clipped_previous[3]:
+                    normalized[-1] = clipped_previous
+                else:
+                    normalized.pop()
+
+            normalized.append((chord, confidence, bounded_start, bounded_end))
+
+        return normalized
 
     def analyze_progression(self, chords: List[Tuple[str, float, int, int]], sr: int = 22050) -> Dict[str, Any]:
         """Analyze chord progression patterns.
@@ -475,22 +507,19 @@ class ChordProgressionAnalyzer:
         root_note = key_parts[0]
         mode = key_parts[1].lower()
 
-        # Convert root note to semitone offset
-        note_to_semitone = {
-            'C': 0,
-            'C#': 1,
-            'D': 2,
-            'D#': 3,
-            'E': 4,
-            'F': 5,
-            'F#': 6,
-            'G': 7,
-            'G#': 8,
-            'A': 9,
-            'A#': 10,
-            'B': 11,
-        }
+        # Convert note names to semitone offsets.  Keep NOTE_NAMES as the
+        # source for the canonical sharp mapping and add common flat aliases.
+        note_to_semitone = {note: semitone for semitone, note in enumerate(NOTE_NAMES)}
+        note_to_semitone.update({'Db': 1, 'Eb': 3, 'Gb': 6, 'Ab': 8, 'Bb': 10})
 
+        def normalize_note(note: str) -> str:
+            """Normalize note spelling while retaining its accidental."""
+            note = note.strip().replace('♭', 'b')
+            if not note:
+                return note
+            return note[0].upper() + note[1:]
+
+        root_note = normalize_note(root_note)
         if root_note not in note_to_semitone:
             return []
 
@@ -512,11 +541,12 @@ class ChordProgressionAnalyzer:
                 roman_numerals.append('N')
                 continue
 
-            # Extract root note from chord
-            if len(chord) > 1 and chord[1] == '#':
-                chord_root = chord[:2]
-            else:
-                chord_root = chord[0]
+            # Extract the root separately from the suffix.  In particular,
+            # ``maj7`` contains an ``m`` but is still a major chord.
+            chord = chord.strip().replace('♭', 'b')
+            root_length = 2 if len(chord) > 1 and chord[1] in '#b' else 1
+            chord_root = normalize_note(chord[:root_length])
+            chord_suffix = chord[root_length:].lower()
 
             if chord_root in note_to_semitone:
                 # Calculate interval from key root
@@ -526,11 +556,14 @@ class ChordProgressionAnalyzer:
                 # Get roman numeral
                 roman = mapping.get(interval, '?')
 
-                # Add minor indication if chord is minor
-                if 'm' in chord and mode == 'major':
+                # Add minor indication if the chord quality is minor.  A
+                # ``maj`` suffix must remain major even though it starts with
+                # the same letter.
+                is_minor = chord_suffix.startswith('m') and not chord_suffix.startswith('maj')
+                if is_minor and mode == 'major':
                     roman = roman.lower()
-                elif 'm' not in chord and mode == 'minor' and roman != '?':
-                    roman = roman.upper()
+                elif not is_minor and mode == 'minor' and roman != '?':
+                    roman = f"{roman[0]}{roman[1:].upper()}" if roman[0] in 'b#' else roman.upper()
 
                 roman_numerals.append(roman)
             else:
