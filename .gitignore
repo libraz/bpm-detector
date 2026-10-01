@@ -14,3 +14,13 @@ coverage.xml
 
 # venv
 .venv
+
+# AI agent config
+.claude/
+.codex/
+CLAUDE.md
+AGENT.md
+AGENTS.md
+
+# local working notes
+backup/
