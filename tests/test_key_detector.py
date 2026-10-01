@@ -236,6 +236,42 @@ class TestKeyDetector(unittest.TestCase):
         self.assertIsInstance(confidence, (int, float))
         self.assertGreaterEqual(confidence, 0.0)
 
+    def test_modulation_no_beats_uses_chroma_frame_indices_for_times(self):
+        """Fallback beat positions must stay in chroma-frame units."""
+        for sr, hop_length in ((100, 10), (200, 20)):
+            with self.subTest(sr=sr, hop_length=hop_length):
+                detector = KeyDetector(hop_length=hop_length)
+                signal = np.zeros(sr * 2)
+                chroma = np.ones((12, 12))
+
+                with patch('librosa.beat.beat_track', return_value=(120.0, np.array([], dtype=int))) as beat_track:
+                    with patch('librosa.feature.chroma_cqt', return_value=chroma):
+                        with patch.object(detector, '_detect_key_from_chroma', return_value=('C Major', 50.0)):
+                            result = detector.compute_modulation_timeseries(signal, sr, bpm=120.0, bars=1, hop_bars=1)
+
+                beat_track.assert_called_once_with(y=signal, sr=sr, start_bpm=120.0, hop_length=hop_length)
+                expected_times = np.array([0.0, 4 * hop_length / sr, 8 * hop_length / sr])
+                np.testing.assert_allclose(result['times'], expected_times)
+
+    def test_modulation_beat_sync_uses_detector_hop(self):
+        """Beat tracking and chroma extraction must share the detector hop."""
+        sr = 100
+        hop_length = 10
+        detector = KeyDetector(hop_length=hop_length)
+        signal = np.zeros(sr * 5)
+        chroma = np.ones((12, 48))
+        beat_frames = np.arange(0, 49, 4, dtype=int)
+
+        with patch('librosa.beat.beat_track', return_value=(120.0, beat_frames)) as beat_track:
+            with patch('librosa.feature.chroma_cqt', return_value=chroma) as chroma_cqt:
+                with patch.object(detector, '_detect_key_from_chroma', return_value=('C Major', 50.0)):
+                    result = detector.compute_modulation_timeseries(signal, sr, bpm=120.0, bars=1, hop_bars=1)
+
+        beat_track.assert_called_once_with(y=signal, sr=sr, start_bpm=120.0, hop_length=hop_length)
+        chroma_cqt.assert_called_once_with(y=signal, sr=sr, hop_length=hop_length)
+        expected_times = np.array([0.0, 16 * hop_length / sr, 32 * hop_length / sr])
+        np.testing.assert_allclose(result['times'], expected_times)
+
 
 class TestKeyDetectionFallbackLogic(unittest.TestCase):
     """Test cases for key detection fallback logic (handles Unknown keys correctly)."""

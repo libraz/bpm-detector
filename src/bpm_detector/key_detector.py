@@ -239,7 +239,8 @@ class KeyDetector:
         """Compute enhanced modulation detection with beat-synchronous analysis and hysteresis."""
         try:
             # 1) Beat-synchronous chroma extraction
-            tempo, beats = librosa.beat.beat_track(y=y, sr=sr, start_bpm=bpm)
+            beats: np.ndarray
+            tempo, beats = librosa.beat.beat_track(y=y, sr=sr, start_bpm=bpm, hop_length=self.hop_length)
             chroma = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=self.hop_length)
 
             # Sync chroma to beats
@@ -249,7 +250,10 @@ class KeyDetector:
             else:
                 # Fallback to regular chroma if beat tracking fails
                 chroma_sync = chroma
-                beats = np.arange(0, len(y) // self.hop_length) * self.hop_length / sr
+                # Beat positions are frame indices, just like the output of
+                # librosa.beat.beat_track.  Keep that unit here; it is
+                # converted to seconds exactly once below.
+                beats = np.arange(chroma.shape[1], dtype=int)
 
             # 2) N-beat window analysis
             beats_per_bar = 4  # Assume 4/4 time signature
