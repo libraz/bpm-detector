@@ -1,6 +1,7 @@
 """Tests for section analyzer module."""
 
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 
@@ -103,6 +104,33 @@ class TestSectionAnalyzer(unittest.TestCase):
         # Should preserve structure
         self.assertIsInstance(enhanced, list)
         self.assertEqual(len(enhanced), len(test_sections))
+
+    def test_enhance_outro_uses_nested_energy_with_flat_fallback(self):
+        """Classifier output stores energy under characteristics, with legacy fallback."""
+        nested_sections = [
+            {'start_time': 0.0, 'end_time': 8.5, 'type': 'chorus', 'characteristics': {'energy': 0.8}},
+            {'start_time': 8.5, 'end_time': 10.0, 'type': 'verse', 'characteristics': {'energy': 0.3}},
+        ]
+
+        with (
+            patch.object(self.analyzer, 'detect_fade_ending', return_value=False),
+            patch.object(self.analyzer, 'detect_harmonic_resolution', return_value=True),
+        ):
+            enhanced = self.analyzer.enhance_outro_detection(nested_sections, self.test_audio, self.sr)
+
+        self.assertEqual(enhanced[-1]['type'], 'outro')
+
+        flat_sections = [
+            {'start_time': 0.0, 'end_time': 8.5, 'type': 'chorus', 'energy_level': 0.8},
+            {'start_time': 8.5, 'end_time': 10.0, 'type': 'verse', 'energy_level': 0.3},
+        ]
+        with (
+            patch.object(self.analyzer, 'detect_fade_ending', return_value=False),
+            patch.object(self.analyzer, 'detect_harmonic_resolution', return_value=True),
+        ):
+            enhanced_flat = self.analyzer.enhance_outro_detection(flat_sections, self.test_audio, self.sr)
+
+        self.assertEqual(enhanced_flat[-1]['type'], 'outro')
 
     def test_detect_fade_ending(self):
         """Test fade ending detection."""

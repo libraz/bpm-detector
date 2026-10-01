@@ -32,6 +32,14 @@ class SectionAnalyzer:
         """
         self.hop_length = hop_length
 
+    @staticmethod
+    def _get_section_energy(section: Dict[str, Any]) -> Any:
+        """Read energy from classifier characteristics or the legacy flat field."""
+        characteristics = section.get('characteristics')
+        if isinstance(characteristics, dict) and characteristics.get('energy') is not None:
+            return characteristics['energy']
+        return section.get('energy_level', 0.0)
+
     def refine_section_labels_with_spectral_analysis(
         self, y: np.ndarray, sr: int, sections: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
@@ -188,7 +196,7 @@ class SectionAnalyzer:
                 has_harmonic_resolution = self.detect_harmonic_resolution(section, y, sr)
 
                 # Reclassify as outro if conditions are met
-                if is_fade_ending or (has_harmonic_resolution and section['energy_level'] < 0.5):
+                if is_fade_ending or (has_harmonic_resolution and self._get_section_energy(section) < 0.5):
                     enhanced_sections[i]['type'] = 'outro'
                     enhanced_sections[i]['ascii_label'] = self.JP_ASCII_LABELS.get('outro', 'outro')
                     enhanced_sections[i]['outro_confidence'] = 0.8 if is_fade_ending else 0.6

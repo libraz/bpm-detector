@@ -11,6 +11,16 @@ class ContextAnalyzer:
     def __init__(self):
         """Initialize context analyzer."""
 
+    @staticmethod
+    def _get_characteristic(section: Dict[str, Any], name: str, default: float = 0.0) -> Any:
+        """Read a characteristic from classifier output or a legacy flat section."""
+        nested_characteristics = section.get('characteristics')
+        if isinstance(nested_characteristics, dict) and nested_characteristics.get(name) is not None:
+            return nested_characteristics[name]
+
+        value = section.get(name, default)
+        return default if value is None else value
+
     def classify_with_relative_energy(
         self, characteristics: Dict[str, Any], all_energies: List[float], current_index: int
     ) -> str:
@@ -128,8 +138,8 @@ class ContextAnalyzer:
             # Check if followed by high-energy section
             if next_sections and len(next_sections) > 0:
                 next_section = next_sections[0]
-                next_energy = next_section.get('energy', 0.0)
-                current_energy = characteristics.get('energy', 0.0)
+                next_energy = self._get_characteristic(next_section, 'energy')
+                current_energy = self._get_characteristic(characteristics, 'energy')
 
                 # If next section has significantly higher energy, keep as pre_chorus
                 if next_energy > current_energy * 1.3:
@@ -140,21 +150,21 @@ class ContextAnalyzer:
 
         # Verse recovery: isolated high-energy sections might be verses
         elif base_type == 'chorus':
-            current_energy = characteristics.get('energy', 0.0)
+            current_energy = self._get_characteristic(characteristics, 'energy')
 
             # Check context
             prev_energy = 0.0
             next_energy = 0.0
 
             if previous_sections:
-                prev_energy = previous_sections[-1].get('energy', 0.0)
+                prev_energy = self._get_characteristic(previous_sections[-1], 'energy')
             if next_sections:
-                next_energy = next_sections[0].get('energy', 0.0)
+                next_energy = self._get_characteristic(next_sections[0], 'energy')
 
             # If isolated high energy (not part of a high-energy sequence)
             if current_energy > 0.6 and prev_energy < current_energy * 0.7 and next_energy < current_energy * 0.7:
                 # Might be a verse with high energy
-                complexity = characteristics.get('spectral_complexity', 0.0)
+                complexity = self._get_characteristic(characteristics, 'spectral_complexity')
                 if complexity < 0.6:  # Lower complexity suggests verse
                     return 'verse'
 
@@ -180,7 +190,7 @@ class ContextAnalyzer:
         """
         # Rule 1: First section is likely intro
         if section_index == 0:
-            energy = characteristics.get('energy', 0.0)
+            energy = self._get_characteristic(characteristics, 'energy')
             if energy < 0.4:  # Low energy start
                 return 'intro'
 
@@ -199,7 +209,7 @@ class ContextAnalyzer:
             # Avoid consecutive pre_chorus
             if prev_type == 'pre_chorus' and resolved_type == 'pre_chorus':
                 # Check if this should be chorus instead
-                energy = characteristics.get('energy', 0.0)
+                energy = self._get_characteristic(characteristics, 'energy')
                 if energy > 0.6:
                     return 'chorus'
                 else:
@@ -207,8 +217,8 @@ class ContextAnalyzer:
 
         # Rule 4: Bridge detection (requires specific characteristics)
         if base_type == 'bridge':
-            complexity = characteristics.get('spectral_complexity', 0.0)
-            harmonic_content = characteristics.get('harmonic_content', 0.0)
+            complexity = self._get_characteristic(characteristics, 'spectral_complexity')
+            harmonic_content = self._get_characteristic(characteristics, 'harmonic_content')
 
             # Bridge should have higher complexity and different harmonic content
             if complexity < 0.6 or harmonic_content < 0.3:
@@ -228,15 +238,15 @@ class ContextAnalyzer:
         Returns:
             True if energy is building
         """
-        prev_energy = prev_section.get('energy', 0.0)
-        current_energy = current_characteristics.get('energy', 0.0)
+        prev_energy = self._get_characteristic(prev_section, 'energy')
+        current_energy = self._get_characteristic(current_characteristics, 'energy')
 
         # Basic energy increase (more lenient threshold)
         energy_increase = current_energy > prev_energy * 1.1
 
         # Additional factors
-        prev_complexity = prev_section.get('spectral_complexity', 0.0)
-        current_complexity = current_characteristics.get('spectral_complexity', 0.0)
+        prev_complexity = self._get_characteristic(prev_section, 'spectral_complexity')
+        current_complexity = self._get_characteristic(current_characteristics, 'spectral_complexity')
         complexity_increase = current_complexity > prev_complexity * 1.05
 
         # Building if energy increases significantly OR both energy and complexity increase
@@ -256,8 +266,8 @@ class ContextAnalyzer:
         """
         # For consecutive verses, check if one should be pre_chorus
         if section_type == 'verse':
-            energy = characteristics.get('energy', 0.0)
-            complexity = characteristics.get('spectral_complexity', 0.0)
+            energy = self._get_characteristic(characteristics, 'energy')
+            complexity = self._get_characteristic(characteristics, 'spectral_complexity')
 
             # Higher energy and complexity might indicate pre_chorus
             if energy > 0.5 and complexity > 0.6:
@@ -265,8 +275,8 @@ class ContextAnalyzer:
 
         # For consecutive chorus, check if one should be bridge
         elif section_type == 'chorus':
-            harmonic_content = characteristics.get('harmonic_content', 0.0)
-            complexity = characteristics.get('spectral_complexity', 0.0)
+            harmonic_content = self._get_characteristic(characteristics, 'harmonic_content')
+            complexity = self._get_characteristic(characteristics, 'spectral_complexity')
 
             # Different harmonic content might indicate bridge
             if harmonic_content < 0.4 and complexity > 0.7:
@@ -361,9 +371,9 @@ class ContextAnalyzer:
             Section type
         """
         # Basic classification based on characteristics
-        energy = characteristics.get('energy', 0.0)
-        complexity = characteristics.get('spectral_complexity', 0.0)
-        harmonic_content = characteristics.get('harmonic_content', 0.0)
+        energy = self._get_characteristic(characteristics, 'energy')
+        complexity = self._get_characteristic(characteristics, 'spectral_complexity')
+        harmonic_content = self._get_characteristic(characteristics, 'harmonic_content')
 
         # Initial classification
         if section_index == 0:

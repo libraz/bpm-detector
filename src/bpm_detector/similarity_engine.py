@@ -505,8 +505,8 @@ class SimilarityEngine:
             'rhythmic': (11, 19),  # Rhythmic features
             'timbral': (19, 41),  # Timbral features
             'structural': (41, 51),  # Structural features
-            'melodic': (51, 65),  # Melodic features
-            'dynamic': (65, 77),  # Dynamic features
+            'melodic': (51, 67),  # Melodic features
+            'dynamic': (67, 81),  # Dynamic features
         }
 
         # Map feature categories to weights
@@ -521,6 +521,7 @@ class SimilarityEngine:
         }
 
         weighted_similarity = 0.0
+        total_weight = 0.0
 
         for category, (start, end) in feature_ranges.items():
             if end <= len(vector1) and end <= len(vector2):
@@ -537,8 +538,11 @@ class SimilarityEngine:
                 # Add weighted contribution
                 weight = category_weights.get(category, 0.0)
                 weighted_similarity += cat_similarity * weight
+                total_weight += weight
 
-        return float(weighted_similarity)
+        if total_weight == 0:
+            return 0.0
+        return float(np.clip(weighted_similarity / total_weight, 0.0, 1.0))
 
     def find_similar_tracks(
         self,

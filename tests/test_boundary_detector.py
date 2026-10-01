@@ -76,6 +76,43 @@ class TestBoundaryDetector(unittest.TestCase):
         if len(boundaries) > 1:
             self.assertTrue(all(boundaries[i] < boundaries[i + 1] for i in range(len(boundaries) - 1)))
 
+    def test_detect_boundaries_covers_terminal_frame_for_short_inputs(self):
+        """Short analyses still describe the complete frame range."""
+        for n_frames in (1, 10, 17):
+            with self.subTest(n_frames=n_frames):
+                similarity_matrix = np.eye(n_frames)
+
+                boundaries = self.detector.detect_boundaries(
+                    similarity_matrix, sr=self.sr, min_segment_length=0.1, bpm=120.0
+                )
+
+                self.assertEqual(boundaries[0], 0)
+                self.assertEqual(boundaries[-1], n_frames - 1)
+                self.assertEqual(boundaries, sorted(set(boundaries)))
+                self.assertTrue(all(0 <= boundary < n_frames for boundary in boundaries))
+
+    def test_snap_to_beat_preserves_short_terminal_boundary(self):
+        """Beat snapping must retain an ending too close to the bar grid."""
+        snapped_boundaries = self.detector.snap_to_beat([0, 1, 4], self.sr, bpm=120.0)
+
+        self.assertEqual(snapped_boundaries, [0, 4])
+
+    def test_structure_smoke_covers_short_real_audio(self):
+        """Feature extraction and boundary detection remain usable for short audio."""
+        for duration in (0.1, 1.0, 3.0):
+            with self.subTest(duration=duration):
+                sample_count = max(1, int(self.sr * duration))
+                t = np.arange(sample_count) / self.sr
+                audio = np.sin(2 * np.pi * 440 * t)
+                features = self.detector.extract_structural_features(audio, self.sr)
+                similarity_matrix = self.detector.compute_self_similarity_matrix(features)
+
+                boundaries = self.detector.detect_boundaries(similarity_matrix, sr=self.sr, bpm=120.0)
+
+                self.assertGreaterEqual(len(boundaries), 1)
+                self.assertEqual(boundaries[0], 0)
+                self.assertEqual(boundaries[-1], similarity_matrix.shape[0] - 1)
+
     def test_compute_novelty(self):
         """Test novelty computation."""
         features = self.detector.extract_structural_features(self.y, self.sr)

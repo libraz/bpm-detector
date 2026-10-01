@@ -100,6 +100,8 @@ class BoundaryDetector:
             List of boundary frame indices
         """
         n_frames = similarity_matrix.shape[0]
+        if n_frames == 0:
+            return []
 
         # ==== ① multi-scale novelty =====
         nov_4 = self._compute_simple_novelty(similarity_matrix, ksize=8)  # ≒2bars
@@ -121,28 +123,35 @@ class BoundaryDetector:
         # If too few boundaries, progressively relax constraints
         if len(peaks) < 3:
             height_threshold = novelty_sorted[int(len(novelty_sorted) * 0.6)]
-            peaks, _ = find_peaks(novelty, distance=min_frames // 2, height=height_threshold)
+            peaks, _ = find_peaks(novelty, distance=max(1, min_frames // 2), height=height_threshold)
 
         if len(peaks) < 3:
             height_threshold = novelty_sorted[int(len(novelty_sorted) * 0.5)]
-            peaks, _ = find_peaks(novelty, distance=min_frames // 3, height=height_threshold)
+            peaks, _ = find_peaks(novelty, distance=max(1, min_frames // 3), height=height_threshold)
 
         # snap to 4-beat grid first
-        bar_frames = int((4 * 60 / bpm) * sr / self.hop_length)
-        peaks = [round(p / bar_frames) * bar_frames for p in peaks]
+        bar_frames = max(1, int((4 * 60 / bpm) * sr / self.hop_length))
+        terminal = n_frames - 1
+        peaks = [min(terminal, max(0, round(p / bar_frames) * bar_frames)) for p in peaks]
 
-        boundaries = [0] + peaks + [n_frames - 1]
+        boundaries = [0] + peaks + [terminal]
         boundaries = sorted(list(set(boundaries)))
 
         # Filter boundaries that are at least 8 bars (=2 bar *4) apart
-        min_sep = int((8 * 60 / bpm) * sr / self.hop_length)
+        min_sep = max(1, int((8 * 60 / bpm) * sr / self.hop_length))
 
-        # Ensure minimum separation
+        # Ensure minimum separation for internal boundaries while always retaining the terminal.
         filtered_boundaries = [boundaries[0]]
 
-        for i in range(1, len(boundaries)):
-            if boundaries[i] - filtered_boundaries[-1] >= min_sep:
-                filtered_boundaries.append(boundaries[i])
+        for boundary in boundaries[1:-1]:
+            if boundary - filtered_boundaries[-1] >= min_sep:
+                filtered_boundaries.append(boundary)
+
+        if terminal > filtered_boundaries[-1]:
+            if terminal - filtered_boundaries[-1] < min_sep and len(filtered_boundaries) > 1:
+                filtered_boundaries[-1] = terminal
+            else:
+                filtered_boundaries.append(terminal)
 
         return filtered_boundaries
 
@@ -354,21 +363,33 @@ class BoundaryDetector:
         Returns:
             List of bar-aligned boundary frame indices
         """
+        if not boundaries:
+            return []
+
         # Calculate frames per bar (4 beats)
-        bar_hop = int((4 * 60 / bpm) * sr / self.hop_length)  # 4 beats = 1 bar
+        bar_hop = max(1, int((4 * 60 / bpm) * sr / self.hop_length))  # 4 beats = 1 bar
+        terminal = max(0, int(boundaries[-1]))
 
         snapped = [0]
         for b in boundaries[1:-1]:
             # Snap to nearest bar boundary
-            snapped_boundary = round(b / bar_hop) * bar_hop
+            snapped_boundary = min(terminal, max(0, round(b / bar_hop) * bar_hop))
             snapped.append(snapped_boundary)
-        snapped.append(boundaries[-1])
+        snapped.append(terminal)
+        snapped = sorted(set(snapped))
 
-        # Remove duplicates and ensure minimum bar separation
+        # Remove duplicate internal boundaries and ensure minimum bar separation.
         filtered = [snapped[0]]
-        for i in range(1, len(snapped)):
-            if snapped[i] - filtered[-1] >= bar_hop:  # At least 1 bar apart
-                filtered.append(snapped[i])
+        for boundary in snapped[1:-1]:
+            if boundary - filtered[-1] >= bar_hop:  # At least 1 bar apart
+                filtered.append(boundary)
+
+        # The final frame closes the last section even when it is less than one bar away.
+        if terminal > filtered[-1]:
+            if terminal - filtered[-1] < bar_hop and len(filtered) > 1:
+                filtered[-1] = terminal
+            else:
+                filtered.append(terminal)
 
         return filtered
 

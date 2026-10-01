@@ -328,3 +328,21 @@ class TestSimilarityEngine(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+def test_weighted_similarity_scores_actual_feature_schema():
+    engine = SimilarityEngine()
+    baseline = engine.extract_feature_vector({})
+    changed = engine.extract_feature_vector(
+        {'dynamics': {'energy_distribution': {'spectral_balance': 1.0}, 'climax_points': [{'intensity': 1.0}]}}
+    )
+    assert len(baseline) == 81
+    assert np.isclose(engine.calculate_similarity(baseline, baseline, 'weighted'), 1.0)
+    assert engine.calculate_similarity(baseline, changed, 'weighted') < 1.0
+
+
+def test_weighted_similarity_normalizes_custom_weights():
+    weights = {name: 2.0 for name in SimilarityEngine.DEFAULT_FEATURE_WEIGHTS}
+    engine = SimilarityEngine(feature_weights=weights)
+    vector = engine.extract_feature_vector({})
+    assert np.isclose(engine.calculate_similarity(vector, vector, 'weighted'), 1.0)
