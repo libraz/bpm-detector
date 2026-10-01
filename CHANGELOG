@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.2.0] - 2026-10-01
+
+### Added
+- `--detect-modulation` CLI option (requires `--detect-key`) reporting key modulation over time
+- Performance Benchmarks section in the READMEs and `examples/benchmark_table.py` to reproduce it
+
+### Changed
+- Python 3.12 or newer is now required; dependency minimums raised, including `librosa>=1.0.0`
+- Installation and Docker image build from lockfiles; the Docker image uses Python 3.14
+- Auto-parallel mode falls back to sequential analysis when CPU or memory is saturated, and caps its memory limit at available memory
+- Importing the package no longer imports the CLI module
+
+### Fixed
+- BPM detection always fell back to the deprecated `librosa.beat.tempo` because the check for the newer API looked up `librosa.feature.rhythm`, which librosa does not expose; it now calls `librosa.feature.tempo` directly, fixing `module 'librosa.beat' has no attribute 'tempo'` with librosa 1.0
+- Tempo read from array results of `beat_track` instead of falling back to 120 BPM
+- Modulation detection mixing beat frames and seconds, and beat frames not matching the chroma grid
+- Chord analysis dropping the final partial window; overlapping chord intervals; Roman numerals for flat roots and `maj7` chords in minor keys
+- Structure analysis edge cases: empty inputs, terminal boundary, nested section energy, similarity weighting
+- Spectral contrast at low sample rates, melody interval categories and vibrato rate
+- Thread safety of the system monitor, performance profiler and progress manager
+- Parallel process workers pickling the analyzer and its monitor thread
+- SIGINT handler now restored after the CLI exits
+
 ## [1.1.0] - 2025-11-01
 
 ### Added
