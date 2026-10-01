@@ -381,3 +381,122 @@ class TestCLI(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_library_import_in_worker_preserves_sigint():
+    import subprocess
+    import sys
+
+    script = '''
+import signal
+from concurrent.futures import ThreadPoolExecutor
+handler = lambda signum, frame: None
+signal.signal(signal.SIGINT, handler)
+with ThreadPoolExecutor(max_workers=1) as pool:
+    pool.submit(__import__, 'bpm_detector').result()
+assert signal.getsignal(signal.SIGINT) is handler
+'''
+    result = subprocess.run([sys.executable, '-c', script], capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+
+
+def test_sequential_cli_continues_after_corrupt_file(tmp_path, capsys):
+    import numpy as np
+    import soundfile as sf
+
+    corrupt = tmp_path / 'corrupt.wav'
+    corrupt.write_bytes(b'not audio')
+    valid = tmp_path / 'valid.wav'
+    sf.write(valid, np.zeros(22050, dtype=np.float32), 22050)
+    with patch('sys.argv', ['bpm-detector', '--no-parallel', '--quiet', str(corrupt), str(valid)]):
+        main()
+    output = capsys.readouterr().out
+    assert f'Error processing {corrupt}' in output
+    assert 'valid.wav' in output
+    assert 'Estimated BPM' in output
+
+
+def test_cli_cleans_up_and_restores_signal_on_missing_file(tmp_path):
+    import signal
+
+    import bpm_detector.cli as cli
+
+    before = signal.getsignal(signal.SIGINT)
+    with patch('bpm_detector.cli.SmartParallelAudioAnalyzer') as analyzer_class:
+        with patch('sys.argv', ['bpm-detector', str(tmp_path / 'missing.wav')]):
+            main()
+        analyzer_class.return_value.cleanup.assert_called_once()
+    assert signal.getsignal(signal.SIGINT) is before
+    assert cli.current_analyzer is None
+
+
+def test_cli_modulation_requires_key():
+    import pytest
+
+    with patch('sys.argv', ['bpm-detector', '--detect-modulation', 'test.wav']):
+        with pytest.raises(SystemExit) as exc:
+            main()
+    assert exc.value.code == 2
+
+
+def test_cli_forwards_modulation_to_sequential_analyzer(tmp_path):
+    path = tmp_path / 'file.wav'
+    path.touch()
+    with patch('bpm_detector.cli.AudioAnalyzer') as analyzer_class:
+        with patch('bpm_detector.cli.print_results'):
+            with patch(
+                'sys.argv',
+                ['bpm-detector', '--no-parallel', '--quiet', '--detect-key', '--detect-modulation', str(path)],
+            ):
+                main()
+    assert analyzer_class.return_value.analyze_file.call_args.kwargs['detect_modulation'] is True
+
+
+def test_cli_prints_modulation(capsys):
+    results = {
+        'basic_info': {'filename': 'x.wav', 'bpm': 120.0, 'bpm_confidence': 0.0},
+        'modulation_analysis': {'modulations': [{'time': 12.0, 'from_key': 'C Major', 'to_key': 'D Major'}]},
+    }
+    print_results(results, detect_key=True)
+    output = capsys.readouterr().out
+    assert 'C Major' in output and 'D Major' in output
+    assert '12.0' in output
+
+
+def test_section_label_matching_type_is_not_repeated(capsys):
+    sections = [
+        {'type': 'intro', 'ascii_label': 'Intro', 'start_time': 0.0, 'duration': 4.0},
+        {'type': 'verse', 'ascii_label': 'A-melo', 'start_time': 4.0, 'duration': 8.0},
+    ]
+    results = {
+        'basic_info': {'filename': 'x.wav', 'bpm': 120.0, 'bpm_confidence': 0.0, 'duration': 12.0},
+        'structure': {'form': 'IA', 'section_count': 2, 'sections': sections},
+    }
+    print_results(results)
+    output = capsys.readouterr().out
+    assert 'Intro(Intro)' not in output
+    assert '1. Intro (00:00' in output
+    assert 'Verse(A-melo)' in output
+
+
+def test_cli_sigint_cleans_up_once_and_restores_handler():
+    import signal
+
+    import pytest
+
+    import bpm_detector.cli as cli
+
+    analyzer = MagicMock()
+    previous = signal.getsignal(signal.SIGINT)
+
+    def interrupt_cli():
+        cli.current_analyzer = analyzer
+        signal.getsignal(signal.SIGINT)(signal.SIGINT, None)
+
+    with patch('bpm_detector.cli._main', interrupt_cli):
+        with pytest.raises(SystemExit) as exc:
+            main()
+    assert exc.value.code == 0
+    analyzer.cleanup.assert_called_once()
+    assert cli.current_analyzer is None
+    assert signal.getsignal(signal.SIGINT) is previous

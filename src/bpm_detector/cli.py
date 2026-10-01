@@ -4,8 +4,10 @@ import argparse
 import os
 import signal
 import sys
+import threading
 import warnings
 from multiprocessing import cpu_count
+from typing import Optional
 
 import psutil
 import soundfile as sf
@@ -20,6 +22,8 @@ from .progress_manager import create_progress_display
 # Suppress sklearn warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning, module="sklearn")
 warnings.filterwarnings("ignore", category=UserWarning, module="librosa")
+# librosa's float64-only numba kernels cast float32 input through buffers holding uninitialized output
+warnings.filterwarnings("ignore", message="invalid value encountered in cast", category=RuntimeWarning, module="numba")
 
 # Initialize colorama for cross-platform colored output
 init(autoreset=True)
@@ -35,23 +39,8 @@ def signal_handler(signum, frame):
     interrupted = True
 
     print(f"\n{Fore.YELLOW}⚠️  Interrupted by user. Cleaning up...{Style.RESET_ALL}")
-
-    # Stop system monitor if analyzer exists
-    if current_analyzer:
-        try:  # type: ignore[unreachable]
-            if hasattr(current_analyzer, 'cleanup'):
-                current_analyzer.cleanup()
-            elif hasattr(current_analyzer, 'system_monitor'):
-                current_analyzer.system_monitor.stop_monitoring()
-        except Exception:
-            pass
-
-    print(f"{Fore.GREEN}✅ Cleanup completed. Exiting gracefully.{Style.RESET_ALL}")
+    # main() owns cleanup for normal returns, errors, and signal exits.
     sys.exit(0)
-
-
-# Register signal handler
-signal.signal(signal.SIGINT, signal_handler)
 
 
 def progress_bar(total_frames: int, sr: int) -> tqdm:
@@ -78,7 +67,7 @@ def show_system_info():
     print(f"   Parallel Enabled: {config.enable_parallel}")
     print(f"   Max Workers: {config.max_workers}")
     print(f"   Process Pool: {config.use_process_pool}")
-    print(f"   Memory Limit: {config.memory_limit_mb} MB")
+    print(f"   Memory budget (advisory): {config.memory_limit_mb} MB")
     print(f"   Strategy: {config.strategy.value}")
     print(f"   Reason: {config.reason}")
 
@@ -98,6 +87,8 @@ def print_results(results: dict, detect_key: bool = False, comprehensive: bool =
         bpm_conf = results["bpm_confidence"]
 
     print(f"\n{Fore.CYAN}{Style.BRIGHT}{filename}{Style.RESET_ALL}")
+    for modulation in results.get('modulation_analysis', {}).get('modulations', []):
+        print(f"  > Modulation at {modulation['time']:.1f}s: " f"{modulation['from_key']} → {modulation['to_key']}")
 
     # Show additional analysis if available (for both comprehensive and selective analysis)
     has_additional_analysis = any(
@@ -172,7 +163,7 @@ def print_results(results: dict, detect_key: bool = False, comprehensive: bool =
                     # Display section with ASCII label
                     section_display = (
                         f"{section_type.title()}({ascii_label})"
-                        if ascii_label != section_type
+                        if ascii_label.lower() != section_type.lower()
                         else section_type.title()
                     )
 
@@ -319,6 +310,7 @@ def analyze_file_with_progress(path: str, analyzer, args: argparse.Namespace) ->
                 analyze_timbre=args.analyze_timbre,
                 analyze_melody=args.analyze_melody,
                 analyze_dynamics=args.analyze_dynamics,
+                detect_modulation=getattr(args, 'detect_modulation', False),
             )
 
             if progress_display:
@@ -337,8 +329,7 @@ def analyze_file_with_progress(path: str, analyzer, args: argparse.Namespace) ->
 
     else:
         # Use traditional progress for regular analyzer
-        info = sf.info(path)
-        bar = progress_bar(info.frames, args.sr) if args.progress else None
+        bar: Optional[tqdm] = None
 
         def progress_callback(increment: int) -> None:
             """Update progress bar to reflect absolute progress percentage."""
@@ -350,6 +341,9 @@ def analyze_file_with_progress(path: str, analyzer, args: argparse.Namespace) ->
                 bar.refresh()
 
         try:
+            if args.progress:
+                info = sf.info(path)
+                bar = progress_bar(info.frames, args.sr)
             results = analyzer.analyze_file(
                 path=path,
                 detect_key=args.detect_key,
@@ -364,6 +358,7 @@ def analyze_file_with_progress(path: str, analyzer, args: argparse.Namespace) ->
                 analyze_timbre=args.analyze_timbre,
                 analyze_melody=args.analyze_melody,
                 analyze_dynamics=args.analyze_dynamics,
+                detect_modulation=getattr(args, 'detect_modulation', False),
             )
 
             if bar:
@@ -377,8 +372,8 @@ def analyze_file_with_progress(path: str, analyzer, args: argparse.Namespace) ->
             print(f"{Fore.RED}Error processing {path}: {e}{Style.RESET_ALL}")
 
 
-def main() -> None:
-    """Main CLI entry point."""
+def _main() -> None:
+    """Parse CLI arguments and run analysis."""
     parser = argparse.ArgumentParser(description="Smart BPM and Key detector with parallel processing")
     parser.add_argument("files", nargs="*", help="Audio file paths")
     parser.add_argument("--sr", type=int, default=SR_DEFAULT, help="Sample rate")
@@ -420,6 +415,8 @@ def main() -> None:
     )
 
     args = parser.parse_args()
+    if args.detect_modulation and not args.detect_key:
+        parser.error("--detect-modulation requires --detect-key")
 
     # Show system info and exit if requested
     if args.show_system_info:
@@ -518,6 +515,7 @@ def main() -> None:
                     analyze_timbre=args.analyze_timbre,
                     analyze_melody=args.analyze_melody,
                     analyze_dynamics=args.analyze_dynamics,
+                    detect_modulation=getattr(args, 'detect_modulation', False),
                 )
 
                 if args.progress:
@@ -538,6 +536,26 @@ def main() -> None:
             # Sequential processing for regular analyzer
             for filepath in valid_files:
                 analyze_file_with_progress(filepath, analyzer, args)
+
+
+def main() -> None:
+    """Run the CLI with scoped signal handling and resource cleanup."""
+    global current_analyzer, interrupted
+    interrupted = False
+    previous_handler = None
+    owns_signal = threading.current_thread() is threading.main_thread()
+    if owns_signal:
+        previous_handler = signal.signal(signal.SIGINT, signal_handler)
+    try:
+        _main()
+    finally:
+        try:
+            if current_analyzer is not None and hasattr(current_analyzer, 'cleanup'):
+                current_analyzer.cleanup()
+        finally:
+            current_analyzer = None
+            if owns_signal:
+                signal.signal(signal.SIGINT, previous_handler)
 
 
 if __name__ == "__main__":

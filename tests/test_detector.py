@@ -48,6 +48,17 @@ class TestBPMDetector(unittest.TestCase):
         # Should choose from the cluster with most votes (120.0 cluster has 68 votes)
         self.assertTrue(bpm in [120.0, 240.0])
 
+    def test_detect_empty_and_silent_audio_returns_default(self):
+        """Empty or silent input has no evidence for a tempo."""
+        for y in (np.array([], dtype=np.float32), np.zeros(22050, dtype=np.float32)):
+            with self.subTest(samples=len(y)):
+                bpm, confidence, candidates, votes = self.detector.detect(y, 22050)
+
+                self.assertEqual(bpm, 120.0)
+                self.assertEqual(confidence, 0.0)
+                self.assertEqual(candidates.size, 0)
+                self.assertEqual(votes.size, 0)
+
 
 class TestKeyDetector(unittest.TestCase):
     """Test key detection functionality."""

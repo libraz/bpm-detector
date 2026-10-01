@@ -3,15 +3,18 @@
 import os
 import shutil
 import tempfile
+import threading
 import unittest
 import warnings
+from concurrent.futures import Future, ThreadPoolExecutor
 from unittest.mock import patch
 
 import numpy as np
 import soundfile as sf
 
 from src.bpm_detector.auto_parallel import AutoParallelConfig, ParallelConfig, SystemMonitor
-from src.bpm_detector.parallel_analyzer import SmartParallelAudioAnalyzer
+from src.bpm_detector.music_analyzer import AudioAnalyzer
+from src.bpm_detector.parallel_analyzer import SmartParallelAudioAnalyzer, _analyze_single_file_worker
 from src.bpm_detector.progress_manager import ProgressManager, TaskStatus
 
 # Suppress warnings during tests
@@ -234,6 +237,13 @@ class TestSmartParallelAudioAnalyzer(unittest.TestCase):
         if analyzer._parallel_config:
             self.assertEqual(analyzer._parallel_config.max_workers, 4)
 
+    def test_missing_file_raises_file_not_found(self):
+        """A path that does not exist surfaces as FileNotFoundError."""
+        analyzer = SmartParallelAudioAnalyzer(auto_parallel=False)
+
+        with self.assertRaises(FileNotFoundError):
+            analyzer.analyze_file('non_existent_file.wav')
+
     @patch('src.bpm_detector.parallel_analyzer.SmartParallelAudioAnalyzer._should_use_parallel')
     def test_fallback_to_sequential(self, mock_should_use_parallel):
         """Test fallback to sequential processing."""
@@ -273,6 +283,505 @@ class TestSmartParallelAudioAnalyzer(unittest.TestCase):
         # Clean up
         for file_path in test_files:
             os.remove(file_path)
+
+    def test_batch_sequential_mode_honors_comprehensive_flag(self):
+        """A sequential batch must pass its explicit comprehensive setting through."""
+        analyzer = SmartParallelAudioAnalyzer(auto_parallel=False)
+
+        results = analyzer.analyze_files([self.test_file], comprehensive=False, detect_key=False)
+
+        self.assertIn(self.test_file, results)
+        self.assertEqual(set(results[self.test_file]), {'basic_info'})
+
+    def test_auto_parallel_false_never_queries_auto_configuration(self):
+        """Disabling auto parallelism must not inspect the host or create a pool."""
+        analyzer = SmartParallelAudioAnalyzer(auto_parallel=False)
+
+        with patch(
+            'src.bpm_detector.parallel_analyzer.AutoParallelConfig.get_optimal_config',
+            side_effect=AssertionError('auto configuration was queried'),
+        ):
+            results = analyzer.analyze_files([self.test_file], comprehensive=False, detect_key=False)
+
+        self.assertIn(self.test_file, results)
+
+    def test_two_argument_callback_works_in_auto_parallel_fallback(self):
+        """The Smart callback contract must survive the sequential fallback."""
+        analyzer = SmartParallelAudioAnalyzer(auto_parallel=False)
+        events = []
+
+        def callback(progress, message):
+            events.append((progress, message))
+
+        result = analyzer.analyze_file(
+            self.test_file, comprehensive=False, detect_key=False, progress_callback=callback
+        )
+
+        self.assertIn('basic_info', result)
+        self.assertTrue(events)
+        self.assertTrue(all(len(event) == 2 for event in events))
+
+    def test_two_argument_callback_works_for_basic_only_fallback(self):
+        """Basic-only analysis must adapt the base analyzer's callback shape."""
+        analyzer = SmartParallelAudioAnalyzer(auto_parallel=True, max_workers=1)
+        analyzer._parallel_config = ParallelConfig(enable_parallel=True, max_workers=1, use_process_pool=False)
+        analyzer.system_monitor.stop_monitoring()
+        analyzer.system_monitor.monitoring = True
+        analyzer.system_monitor.current_load = {'cpu': 95, 'memory': 0}
+        events = []
+
+        def callback(progress, message):
+            events.append((progress, message))
+
+        result = analyzer.analyze_file(
+            self.test_file, comprehensive=False, detect_key=False, progress_callback=callback
+        )
+
+        self.assertIn('basic_info', result)
+        self.assertTrue(events)
+        self.assertTrue(all(len(event) == 2 for event in events))
+
+    def test_two_argument_callback_works_when_load_forces_fallback(self):
+        """High host load must not bypass the Smart callback adapter."""
+        analyzer = SmartParallelAudioAnalyzer(auto_parallel=True, max_workers=1)
+        analyzer._parallel_config = ParallelConfig(enable_parallel=True, max_workers=1, use_process_pool=False)
+        analyzer.system_monitor.stop_monitoring()
+        analyzer.system_monitor.monitoring = True
+        analyzer.system_monitor.current_load = {'cpu': 95, 'memory': 0}
+        events = []
+
+        def callback(progress, message):
+            events.append((progress, message))
+
+        result = analyzer.analyze_file(self.test_file, comprehensive=True, detect_key=False, progress_callback=callback)
+
+        self.assertIn('basic_info', result)
+        self.assertTrue(events)
+        self.assertTrue(all(len(event) == 2 for event in events))
+
+    def test_process_pool_worker_is_module_level_and_keeps_audio_configuration(self):
+        """Spawned workers must be pickleable and receive sr/hop_length explicitly."""
+        # A direct function lookup documents the worker boundary used by ProcessPoolExecutor.
+        self.assertTrue(callable(_analyze_single_file_worker))
+
+        analyzer = SmartParallelAudioAnalyzer(auto_parallel=True, max_workers=2, sr=8000, hop_length=64)
+        analyzer._parallel_config = ParallelConfig(enable_parallel=True, max_workers=2, use_process_pool=True)
+        second_file = os.path.join(self.temp_dir, 'test-second.wav')
+        shutil.copyfile(self.test_file, second_file)
+        try:
+            expected_analyzer = AudioAnalyzer(sr=8000, hop_length=64)
+            expected = {
+                path: expected_analyzer.analyze_file(path, comprehensive=False, detect_key=False, analyze_chords=True)
+                for path in (self.test_file, second_file)
+            }
+            results = analyzer.analyze_files(
+                [self.test_file, second_file], comprehensive=False, detect_key=False, analyze_chords=True
+            )
+
+            self.assertEqual(results, expected)
+            for result in results.values():
+                self.assertNotIn('error', result)
+        finally:
+            analyzer.cleanup()
+            if os.path.exists(second_file):
+                os.remove(second_file)
+
+    def test_thread_batch_owns_file_concurrency_and_profiles_each_file(self):
+        """A thread batch must not create nested per-file analysis pools."""
+        second_file = os.path.join(self.temp_dir, 'test-second.wav')
+        shutil.copyfile(self.test_file, second_file)
+        analyzer = SmartParallelAudioAnalyzer(auto_parallel=True, max_workers=2)
+        analyzer._parallel_config = ParallelConfig(enable_parallel=True, max_workers=2, use_process_pool=False)
+        analyzer.system_monitor.stop_monitoring()
+        analyzer.system_monitor.current_load = {'cpu': 0, 'memory': 0}
+
+        active = 0
+        peak = 0
+        active_lock = threading.Lock()
+        executor_workers = []
+        original_chord = analyzer.chord_analyzer.analyze
+        original_dynamics = analyzer.dynamics_analyzer.analyze
+
+        def tracked(original):
+            def wrapped(*args, **kwargs):
+                nonlocal active, peak
+                with active_lock:
+                    active += 1
+                    peak = max(peak, active)
+                try:
+                    return original(*args, **kwargs)
+                finally:
+                    with active_lock:
+                        active -= 1
+
+            return wrapped
+
+        analyzer.chord_analyzer.analyze = tracked(original_chord)
+        analyzer.dynamics_analyzer.analyze = tracked(original_dynamics)
+
+        class RecordingExecutor:
+            def __init__(self, *args, **kwargs):
+                workers = kwargs.get('max_workers')
+                if workers is None and args:
+                    workers = args[0]
+                executor_workers.append(workers)
+                self._executor = ThreadPoolExecutor(*args, **kwargs)
+
+            def __enter__(self):
+                self._executor.__enter__()
+                return self
+
+            def __exit__(self, *args):
+                return self._executor.__exit__(*args)
+
+            def submit(self, *args, **kwargs):
+                return self._executor.submit(*args, **kwargs)
+
+        try:
+            with patch('src.bpm_detector.parallel_analyzer.ThreadPoolExecutor', RecordingExecutor):
+                actual = analyzer.analyze_files(
+                    [self.test_file, second_file],
+                    comprehensive=False,
+                    detect_key=False,
+                    analyze_chords=True,
+                    analyze_dynamics=True,
+                )
+
+            expected_analyzer = AudioAnalyzer(sr=analyzer.sr, hop_length=analyzer.hop_length)
+            expected = {
+                path: expected_analyzer.analyze_file(
+                    path, comprehensive=False, detect_key=False, analyze_chords=True, analyze_dynamics=True
+                )
+                for path in (self.test_file, second_file)
+            }
+            self.assertEqual(actual, expected)
+            self.assertEqual(executor_workers, [2])
+            self.assertLessEqual(peak, 2)
+            summary = analyzer.get_performance_summary()
+            self.assertEqual(summary['task_summaries']['file_analysis']['count'], 2)
+        finally:
+            analyzer.cleanup()
+            if os.path.exists(second_file):
+                os.remove(second_file)
+
+    def test_parallel_batch_reports_progress_for_failed_futures(self):
+        """A failed file still advances the batch progress to the terminal value."""
+        missing_file = os.path.join(self.temp_dir, 'missing.wav')
+
+        for use_process_pool in (False, True):
+            analyzer = SmartParallelAudioAnalyzer(auto_parallel=True, max_workers=2)
+            analyzer._parallel_config = ParallelConfig(
+                enable_parallel=True, max_workers=2, use_process_pool=use_process_pool
+            )
+            analyzer.system_monitor.stop_monitoring()
+            updates = []
+            try:
+                results = analyzer.analyze_files(
+                    [self.test_file, missing_file],
+                    comprehensive=False,
+                    progress_callback=lambda progress, message: updates.append((progress, message)),
+                    detect_key=False,
+                )
+
+                self.assertIn(self.test_file, results)
+                self.assertIn(missing_file, results)
+                self.assertIn('error', results[missing_file])
+                self.assertEqual(updates[-1][0], 100)
+            finally:
+                analyzer.cleanup()
+
+    def test_empty_parallel_batch_reports_completion(self):
+        """An empty batch has a deterministic terminal progress notification."""
+        analyzer = SmartParallelAudioAnalyzer(auto_parallel=False)
+        updates = []
+
+        result = analyzer.analyze_files([], progress_callback=lambda progress, message: updates.append(progress))
+
+        self.assertEqual(result, {})
+        self.assertEqual(updates, [100])
+
+    def test_parallel_progress_callbacks_are_serialized(self):
+        """A slower callback cannot be overtaken by a later task update."""
+        analyzer = SmartParallelAudioAnalyzer(auto_parallel=True, max_workers=2)
+        analyzer._parallel_config = ParallelConfig(enable_parallel=True, max_workers=2, use_process_pool=False)
+        analyzer.system_monitor.stop_monitoring()
+        values = []
+        callback_52 = threading.Event()
+        callback_95 = threading.Event()
+        release_52 = threading.Event()
+
+        def callback(progress, message):
+            if progress == 52.5:
+                callback_52.set()
+                release_52.wait(timeout=2)
+            elif progress == 95.0:
+                callback_95.set()
+            values.append(progress)
+
+        def fake_parallel(y, sr, path, progress_manager, **kwargs):
+            progress_manager.register_task('a', 'A')
+            progress_manager.register_task('b', 'B')
+
+            first = threading.Thread(target=lambda: progress_manager.complete_task('a', True))
+            first.start()
+            self.assertTrue(callback_52.wait(timeout=2))
+
+            second = threading.Thread(target=lambda: progress_manager.complete_task('b', True))
+            second.start()
+            # Give an unsynchronized callback a chance to overtake the first
+            # callback.  A synchronized implementation keeps the second task
+            # behind the dispatch lock, then the timeout releases the first.
+
+            def wait_for_second_callback():
+                callback_95.wait(timeout=0.25)
+                release_52.set()
+
+            threading.Thread(target=wait_for_second_callback).start()
+            second.join(timeout=2)
+            first.join(timeout=2)
+            release_52.set()
+            self.assertFalse(first.is_alive())
+            self.assertFalse(second.is_alive())
+            return {'basic_info': {'filename': path}}
+
+        analyzer._load_audio = lambda path: (np.zeros(8), 22050)
+        analyzer._parallel_comprehensive_analysis = fake_parallel
+        try:
+            analyzer.analyze_file('synthetic.wav', progress_callback=callback)
+        finally:
+            release_52.set()
+            analyzer.cleanup()
+
+        self.assertEqual(values[-1], 100)
+        self.assertTrue(all(previous <= current for previous, current in zip(values, values[1:])), values)
+
+    def test_progress_callback_error_is_not_retried(self):
+        """A user callback failure is delivered once for each manager update."""
+        analyzer = SmartParallelAudioAnalyzer(auto_parallel=True, max_workers=1)
+        analyzer._parallel_config = ParallelConfig(enable_parallel=True, max_workers=1, use_process_pool=False)
+        analyzer.system_monitor.stop_monitoring()
+        callback_calls = []
+
+        def callback(progress, message):
+            if message not in {'Loading audio file...', 'Starting parallel analysis...', 'Analysis completed!'}:
+                callback_calls.append((progress, message))
+                raise TypeError('user callback failed')
+
+        def fake_parallel(y, sr, path, progress_manager, **kwargs):
+            progress_manager.register_task('one', 'One')
+            progress_manager.complete_task('one', True)
+            return {'basic_info': {'filename': path}}
+
+        analyzer._load_audio = lambda path: (np.zeros(8), 22050)
+        analyzer._parallel_comprehensive_analysis = fake_parallel
+        try:
+            result = analyzer.analyze_file('synthetic.wav', progress_callback=callback)
+        finally:
+            analyzer.cleanup()
+
+        self.assertEqual(result, {'basic_info': {'filename': 'synthetic.wav'}})
+        self.assertEqual(len(callback_calls), 2)
+
+    def test_selective_chord_analysis_matches_base_schema(self):
+        """The parallel chord path must return the same complete schema as AudioAnalyzer."""
+        analyzer = SmartParallelAudioAnalyzer(auto_parallel=True, max_workers=1)
+        analyzer._parallel_config = ParallelConfig(enable_parallel=True, max_workers=1, use_process_pool=False)
+        analyzer.system_monitor.current_load = {'cpu': 0, 'memory': 0}
+        try:
+            expected = AudioAnalyzer(sr=analyzer.sr, hop_length=analyzer.hop_length).analyze_file(
+                self.test_file, comprehensive=False, detect_key=False, analyze_chords=True
+            )
+            actual = analyzer.analyze_file(self.test_file, comprehensive=False, detect_key=False, analyze_chords=True)
+
+            self.assertEqual(actual, expected)
+            self.assertEqual(
+                set(actual['chord_progression']),
+                {
+                    'chords',
+                    'main_progression',
+                    'progression_pattern',
+                    'harmonic_rhythm',
+                    'chord_complexity',
+                    'unique_chords',
+                    'chord_changes',
+                    'functional_analysis',
+                    'modulations',
+                    'substitute_chords_ratio',
+                },
+            )
+        finally:
+            analyzer.cleanup()
+
+    def test_structure_progress_helper_returns_full_analyzer_result_once(self):
+        """Structure progress must wrap the canonical analyzer without a second pass."""
+        analyzer = SmartParallelAudioAnalyzer(auto_parallel=False)
+
+        class StructureSpy:
+            def __init__(self):
+                self.calls = 0
+                self.result = {
+                    'sections': [{'start_time': 0.0, 'end_time': 1.0}],
+                    'section_summary': 'none',
+                    'form': 'A',
+                    'repetition_ratio': 0.0,
+                    'structural_complexity': 0.0,
+                    'section_count': 0,
+                    'unique_sections': 0,
+                    'repetitions': [],
+                    'boundaries': [],
+                }
+
+            def analyze(self, y, sr, bpm=130.0):
+                self.calls += 1
+                return self.result
+
+            def __getattr__(self, name):
+                raise AssertionError(f'unexpected redundant structure pass: {name}')
+
+        spy = StructureSpy()
+        analyzer.structure_analyzer = spy
+        helper_calls = []
+
+        def annotate_sections(y, sr, sections, bpm=130.0):
+            helper_calls.append((y, sr, bpm))
+            annotated = [dict(section, chord_progression='Unknown') for section in sections]
+            return annotated
+
+        analyzer._analyze_section_chord_progressions = annotate_sections
+        callback_updates = []
+
+        result = analyzer._analyze_structure_with_progress(
+            np.zeros(4), 22050, lambda progress, message: callback_updates.append((progress, message)), bpm=97.0
+        )
+
+        expected = dict(spy.result)
+        expected['sections'] = [{'start_time': 0.0, 'end_time': 1.0, 'chord_progression': 'Unknown'}]
+        self.assertEqual(result, expected)
+        self.assertEqual(spy.calls, 1)
+        self.assertEqual(helper_calls[0][2], 97.0)
+
+    def test_selective_structure_analysis_matches_base_schema(self):
+        """Parallel structure output keeps the base fields and section annotations."""
+        analyzer = SmartParallelAudioAnalyzer(auto_parallel=True, max_workers=1)
+        analyzer._parallel_config = ParallelConfig(enable_parallel=True, max_workers=1, use_process_pool=False)
+        analyzer.system_monitor.current_load = {'cpu': 0, 'memory': 0}
+        try:
+            expected = AudioAnalyzer(sr=analyzer.sr, hop_length=analyzer.hop_length).analyze_file(
+                self.test_file, comprehensive=False, detect_key=False, analyze_structure=True
+            )
+            actual = analyzer.analyze_file(
+                self.test_file, comprehensive=False, detect_key=False, analyze_structure=True
+            )
+
+            self.assertEqual(actual, expected)
+            self.assertIn('sections', actual['structure'])
+            self.assertIn('section_summary', actual['structure'])
+            self.assertIn('repetitions', actual['structure'])
+            self.assertIn('boundaries', actual['structure'])
+        finally:
+            analyzer.cleanup()
+
+    def test_dsp_failure_is_not_retried_when_signature_is_known(self):
+        """An analyzer error must propagate after one call, without a fallback retry."""
+        analyzer = SmartParallelAudioAnalyzer(auto_parallel=False)
+        manager = ProgressManager()
+        manager.register_task('test', 'Test')
+        calls = []
+
+        def failing_analyzer(*args, **kwargs):
+            calls.append((args, kwargs))
+            raise RuntimeError('DSP failure')
+
+        with self.assertRaisesRegex(RuntimeError, 'DSP failure'):
+            analyzer._analyze_with_progress('test', manager, failing_analyzer, np.zeros(4), 22050)
+
+        self.assertEqual(len(calls), 1)
+
+    def test_signature_lookup_failure_still_runs_analyzer_once(self):
+        """Unsupported signatures use one direct call instead of swallowing it."""
+        analyzer = SmartParallelAudioAnalyzer(auto_parallel=False)
+        manager = ProgressManager()
+        manager.register_task('test', 'Test')
+
+        class SignatureUnavailable:
+            def __init__(self):
+                self.calls = 0
+
+            @property
+            def __signature__(self):
+                raise RuntimeError('signature unavailable')
+
+            def __call__(self, *args, **kwargs):
+                self.calls += 1
+                return {'ok': True}
+
+        callback = SignatureUnavailable()
+        result = analyzer._analyze_with_progress('test', manager, callback, np.zeros(4), 22050)
+
+        self.assertEqual(result, {'ok': True})
+        self.assertEqual(callback.calls, 1)
+
+    def test_manual_worker_limit_is_preserved_after_batch_adjustment(self):
+        """File-count tuning may not raise an explicitly requested worker ceiling."""
+        analyzer = SmartParallelAudioAnalyzer(auto_parallel=True, max_workers=2)
+        analyzer._parallel_config = ParallelConfig(enable_parallel=True, max_workers=2, use_process_pool=True)
+        adjusted = ParallelConfig(enable_parallel=True, max_workers=16, use_process_pool=True)
+
+        with (
+            patch(
+                'src.bpm_detector.parallel_analyzer.AutoParallelConfig.get_file_count_adjustment', return_value=adjusted
+            ),
+            patch.object(analyzer, '_parallel_analyze_multiple_files', return_value={}) as parallel,
+        ):
+            analyzer._analyze_multiple_files(['one.wav', 'two.wav'], comprehensive=False)
+
+        passed_config = parallel.call_args.args[2]
+        self.assertEqual(passed_config.max_workers, 2)
+
+    def test_single_file_executor_uses_recommended_workers_once(self):
+        """Single-file analysis must use the recommended count without multiplying it."""
+        analyzer = SmartParallelAudioAnalyzer(auto_parallel=False)
+        manager = ProgressManager()
+        analyzer._get_current_max_workers = lambda: 2
+        analyzer._analyze_basic_info_with_progress = lambda *args, **kwargs: {
+            'filename': 'test.wav',
+            'bpm': 120.0,
+            'key': None,
+        }
+        future = Future()
+        future.set_result({})
+
+        with patch('src.bpm_detector.parallel_analyzer.ThreadPoolExecutor') as executor_cls:
+            executor = executor_cls.return_value.__enter__.return_value
+            executor.submit.return_value = future
+            analyzer._parallel_comprehensive_analysis(
+                np.zeros(8), 22050, 'test.wav', manager, detect_key=False, comprehensive=False, analyze_rhythm=True
+            )
+
+        executor_cls.assert_called_once_with(max_workers=2)
+
+    def test_modulation_requires_key_detection(self):
+        """Modulation analysis needs a detected base key."""
+        analyzer = SmartParallelAudioAnalyzer(auto_parallel=False)
+
+        with self.assertRaises(ValueError):
+            analyzer.analyze_file(self.test_file, detect_key=False, detect_modulation=True)
+
+    def test_parallel_modulation_matches_base_analysis(self):
+        """The modulation result is produced by the same detector as the base path."""
+        analyzer = SmartParallelAudioAnalyzer(auto_parallel=True, max_workers=1)
+        analyzer._parallel_config = ParallelConfig(enable_parallel=True, max_workers=1, use_process_pool=False)
+        analyzer.system_monitor.current_load = {'cpu': 0, 'memory': 0}
+        try:
+            expected = AudioAnalyzer(sr=analyzer.sr, hop_length=analyzer.hop_length).analyze_file(
+                self.test_file, comprehensive=False, detect_key=True, detect_modulation=True
+            )
+            actual = analyzer.analyze_file(self.test_file, comprehensive=False, detect_key=True, detect_modulation=True)
+
+            self.assertEqual(actual, expected)
+            self.assertIn('modulation_analysis', actual)
+        finally:
+            analyzer.cleanup()
 
 
 class TestAdvancedParallelFeatures(unittest.TestCase):
@@ -317,6 +826,37 @@ class TestAdvancedParallelFeatures(unittest.TestCase):
             self.assertGreaterEqual(progress, 0.0)
             self.assertLessEqual(progress, 100.0)
             self.assertIsInstance(message, str)
+
+        self.assertEqual(progress_updates[-1][0], 100)
+        progress_values = [progress for progress, _ in progress_updates]
+        self.assertTrue(all(previous <= current for previous, current in zip(progress_values, progress_values[1:])))
+
+    def test_full_comprehensive_parallel_matches_sequential(self):
+        """The enabled single-file pool preserves the complete base result."""
+        sequential = AudioAnalyzer(sr=self.sr, hop_length=128).analyze_file(
+            self.test_file, comprehensive=True, detect_key=True
+        )
+        parallel_analyzer = SmartParallelAudioAnalyzer(auto_parallel=True, max_workers=2, sr=self.sr, hop_length=128)
+        parallel_analyzer._parallel_config = ParallelConfig(enable_parallel=True, max_workers=2, use_process_pool=False)
+        parallel_analyzer.system_monitor.stop_monitoring()
+        parallel_analyzer.system_monitor.current_load = {'cpu': 0, 'memory': 0}
+        try:
+            parallel = parallel_analyzer.analyze_file(self.test_file, comprehensive=True, detect_key=True)
+
+            self.assertEqual(set(parallel), set(sequential))
+            self.assertEqual(parallel['basic_info'], sequential['basic_info'])
+            self.assertEqual(parallel['structure'], sequential['structure'])
+            self.assertEqual(parallel['chord_progression'], sequential['chord_progression'])
+            self.assertEqual(set(parallel['structure']), set(sequential['structure']))
+            self.assertEqual(set(parallel['chord_progression']), set(sequential['chord_progression']))
+            np.testing.assert_allclose(
+                parallel['similarity_features']['feature_vector'],
+                sequential['similarity_features']['feature_vector'],
+                rtol=1e-6,
+                atol=1e-7,
+            )
+        finally:
+            parallel_analyzer.cleanup()
 
     def test_system_resource_monitoring(self):
         """Test system resource monitoring during analysis."""

@@ -3,6 +3,7 @@
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 import soundfile as sf
@@ -267,6 +268,183 @@ class TestAudioAnalyzer(unittest.TestCase):
 
         # Should end at a reasonable progress value
         self.assertGreater(progress_values[-1], 0)
+
+    def test_basic_only_progress_ends_at_100(self):
+        """Basic-only analysis has exactly two progress steps."""
+        progress_values = []
+        with (
+            patch.object(self.analyzer, '_load_audio', return_value=(np.zeros(100), 100)),
+            patch.object(self.analyzer.bpm_detector, 'detect', return_value=(120.0, 0.0, np.array([]), np.array([]))),
+        ):
+            self.analyzer.analyze_file(
+                self.temp_file.name, detect_key=False, comprehensive=False, progress_callback=progress_values.append
+            )
+
+        self.assertEqual(progress_values, [50, 100])
+
+    def test_selected_progress_ends_at_100_without_exceeding_it(self):
+        """The denominator must account for every selected module."""
+        progress_values = []
+        with (
+            patch.object(self.analyzer, '_load_audio', return_value=(np.zeros(100), 100)),
+            patch.object(self.analyzer.bpm_detector, 'detect', return_value=(120.0, 0.0, np.array([]), np.array([]))),
+            patch.object(self.analyzer.chord_analyzer, 'analyze', return_value={}),
+            patch.object(self.analyzer.rhythm_analyzer, 'analyze', return_value={}),
+        ):
+            self.analyzer.analyze_file(
+                self.temp_file.name,
+                detect_key=False,
+                comprehensive=False,
+                analyze_chords=True,
+                analyze_rhythm=True,
+                progress_callback=progress_values.append,
+            )
+
+        self.assertEqual(progress_values, [25, 50, 75, 100])
+        self.assertLessEqual(max(progress_values), 100)
+
+    def test_detected_bpm_is_forwarded_to_chord_and_structure_analysis(self):
+        """Chord and structure analyzers use the BPM detected for this track."""
+        audio = np.ones(100)
+        with (
+            patch.object(self.analyzer, '_load_audio', return_value=(audio, 100)),
+            patch.object(
+                self.analyzer.bpm_detector, 'detect', return_value=(90.0, 80.0, np.array([90.0]), np.array([1]))
+            ),
+            patch.object(self.analyzer.chord_analyzer, 'analyze', return_value={}) as chord_analyze,
+            patch.object(self.analyzer.structure_analyzer, 'analyze', return_value={}) as structure_analyze,
+        ):
+            self.analyzer.analyze_file(
+                self.temp_file.name, detect_key=False, comprehensive=False, analyze_chords=True, analyze_structure=True
+            )
+
+        chord_analyze.assert_called_once()
+        chord_args, chord_kwargs = chord_analyze.call_args
+        np.testing.assert_array_equal(chord_args[0], audio)
+        self.assertEqual(chord_args[1:], (100, 'C Major', 90.0))
+        self.assertEqual(chord_kwargs, {})
+
+        structure_analyze.assert_called_once()
+        structure_args, structure_kwargs = structure_analyze.call_args
+        np.testing.assert_array_equal(structure_args[0], audio)
+        self.assertEqual(structure_args[1:], (100, 90.0))
+        self.assertEqual(structure_kwargs, {})
+
+    def test_section_chord_progressions_preserve_order_and_bpm(self):
+        """Section chord labels are deterministic and use the detected BPM."""
+        audio = np.ones(300)
+        sections = [{'start_time': 0.0, 'end_time': 2.0, 'type': 'verse', 'custom': 'keep'}]
+        chroma = np.ones((12, 2))
+        chords = [('C', 0.9), ('G', 0.8), ('C', 0.7), ('Am', 0.6)]
+        with (
+            patch.object(self.analyzer.chord_analyzer, 'extract_chroma_features', return_value=chroma),
+            patch.object(self.analyzer.chord_analyzer, 'detect_chords', return_value=chords) as detect_chords,
+        ):
+            enriched = self.analyzer._analyze_section_chord_progressions(audio, 100, sections, bpm=90.0)
+
+        self.assertEqual(enriched[0]['chord_progression'], 'C → G → Am')
+        self.assertEqual(enriched[0]['custom'], 'keep')
+        detect_chords.assert_called_once()
+        detect_args, detect_kwargs = detect_chords.call_args
+        np.testing.assert_array_equal(detect_args[0], chroma)
+        self.assertEqual(detect_kwargs, {'bpm': 90.0, 'sr': 100})
+
+    def test_section_chord_progressions_use_unknown_for_short_sections(self):
+        """Sections of one second or less receive an Unknown progression."""
+        sections = [{'start_time': 0.0, 'end_time': 1.0, 'type': 'intro'}]
+
+        enriched = self.analyzer._analyze_section_chord_progressions(np.ones(200), 100, sections, bpm=90.0)
+
+        self.assertEqual(enriched[0]['chord_progression'], 'Unknown')
+
+    def test_structure_analysis_keeps_all_fields_when_adding_section_chords(self):
+        """Structure augmentation retains the canonical result fields."""
+        audio = np.ones(300)
+        structure_result = {
+            'sections': [{'start_time': 0.0, 'end_time': 2.0, 'type': 'verse'}],
+            'form': 'A',
+            'boundaries': [0.0, 2.0],
+            'repetitions': [{'start': 0, 'end': 1}],
+            'custom_field': 'preserve',
+        }
+        with (
+            patch.object(self.analyzer, '_load_audio', return_value=(audio, 100)),
+            patch.object(
+                self.analyzer.bpm_detector, 'detect', return_value=(90.0, 80.0, np.array([90.0]), np.array([1]))
+            ),
+            patch.object(
+                self.analyzer.structure_analyzer, 'analyze', return_value=structure_result
+            ) as analyze_structure,
+            patch.object(self.analyzer.chord_analyzer, 'extract_chroma_features', return_value=np.ones((12, 2))),
+            patch.object(
+                self.analyzer.chord_analyzer, 'detect_chords', return_value=[('C', 0.9), ('G', 0.8), ('C', 0.7)]
+            ),
+        ):
+            results = self.analyzer.analyze_file(
+                self.temp_file.name, detect_key=False, comprehensive=False, analyze_structure=True
+            )
+
+        self.assertEqual(set(results['structure']), set(structure_result))
+        self.assertEqual(results['structure']['custom_field'], 'preserve')
+        self.assertEqual(results['structure']['sections'][0]['chord_progression'], 'C → G')
+        structure_args, structure_kwargs = analyze_structure.call_args
+        np.testing.assert_array_equal(structure_args[0], audio)
+        self.assertEqual(structure_args[1:], (100, 90.0))
+        self.assertEqual(structure_kwargs, {})
+
+    def test_detect_modulation_returns_analysis(self):
+        """Requested modulation analysis is returned once at the top level."""
+        expected = {'times': [0.0], 'scores': [0.9], 'keys': ['C Major'], 'modulations': []}
+        with (
+            patch.object(self.analyzer, '_load_audio', return_value=(np.ones(100), 100)),
+            patch.object(
+                self.analyzer.bpm_detector, 'detect', return_value=(120.0, 80.0, np.array([120.0]), np.array([1]))
+            ),
+            patch.object(
+                self.analyzer.key_detector,
+                'detect_key',
+                return_value={
+                    'key': 'C',
+                    'mode': 'Major',
+                    'confidence': 90.0,
+                    'key_strength': 0.9,
+                    'analysis_notes': 'test',
+                },
+            ),
+            patch.object(
+                self.analyzer.key_detector, 'compute_modulation_timeseries', return_value=expected
+            ) as compute_modulation,
+        ):
+            results = self.analyzer.analyze_file(
+                self.temp_file.name, detect_key=True, comprehensive=False, detect_modulation=True
+            )
+
+        self.assertEqual(results['modulation_analysis'], expected)
+        compute_modulation.assert_called_once()
+        call_args, call_kwargs = compute_modulation.call_args
+        np.testing.assert_array_equal(call_args[0], np.ones(100))
+        self.assertEqual(call_args[1:], (100, 120.0))
+        self.assertEqual(call_kwargs, {})
+
+    def test_detect_modulation_is_absent_by_default(self):
+        """Modulation analysis is opt-in."""
+        with (
+            patch.object(self.analyzer, '_load_audio', return_value=(np.zeros(100), 100)),
+            patch.object(self.analyzer.bpm_detector, 'detect', return_value=(120.0, 0.0, np.array([]), np.array([]))),
+        ):
+            results = self.analyzer.analyze_file(self.temp_file.name, detect_key=False, comprehensive=False)
+
+        self.assertNotIn('modulation_analysis', results)
+
+    def test_detect_modulation_requires_key_before_loading(self):
+        """Modulation cannot run without key detection and fails before I/O."""
+        with patch.object(self.analyzer, '_load_audio') as load_audio:
+            with self.assertRaises(ValueError):
+                self.analyzer.analyze_file(
+                    self.temp_file.name, detect_key=False, comprehensive=False, detect_modulation=True
+                )
+
+        load_audio.assert_not_called()
 
     def test_error_handling(self):
         """Test error handling with invalid input."""
@@ -791,6 +969,43 @@ class TestBPMDetectorEdgeCases(unittest.TestCase):
         self.assertIsInstance(conf, float)
         self.assertGreaterEqual(conf, 0.0)
         self.assertLessEqual(conf, 100.0)
+
+    def test_detect_with_no_candidates_in_range_returns_default(self):
+        """No tempo candidate inside [min_bpm, max_bpm] yields the default, not NaN."""
+        from unittest.mock import patch
+
+        y = np.ones(22050, dtype=np.float32)
+        with patch("librosa.feature.tempo", return_value=np.full(100, 120.0)):
+            bpm, conf, top_bpms, top_hits = self.detector.detect(y, 22050, min_bpm=250, max_bpm=300)
+
+        self.assertEqual(bpm, 120.0)
+        self.assertEqual(conf, 0.0)
+        self.assertEqual(len(top_bpms), 0)
+        self.assertEqual(len(top_hits), 0)
+
+    def test_detect_excludes_zero_vote_bins_from_candidates(self):
+        """Only bins that received votes are reported as BPM candidates."""
+        from unittest.mock import patch
+
+        y = np.ones(22050, dtype=np.float32)
+        with patch("librosa.feature.tempo", return_value=np.full(100, 120.0)):
+            _, _, top_bpms, top_hits = self.detector.detect(y, 22050)
+
+        self.assertEqual(list(top_hits), [100])
+        self.assertEqual(len(top_bpms), 1)
+
+    def test_detect_trims_long_audio_to_centered_window(self):
+        """Audio longer than the cap is analysed over a full-length window at its centre."""
+        from unittest.mock import patch
+
+        sr = 100
+        y = np.arange(200 * sr, dtype=np.float32)
+        with patch("librosa.feature.tempo", return_value=np.full(10, 120.0)) as tempo:
+            self.detector.detect(y, sr)
+
+        y_used = tempo.call_args.kwargs["y"]
+        self.assertEqual(len(y_used), 180 * sr)
+        self.assertEqual(y_used[0], 10 * sr)
 
 
 if __name__ == '__main__':

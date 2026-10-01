@@ -1,6 +1,6 @@
 """BPM and Key detection algorithms."""
 
-import warnings
+import os
 from typing import Any, Dict, List, Optional, Tuple, cast
 
 import librosa
@@ -50,7 +50,7 @@ class BPMDetector:
     def smart_choice(self, clusters: Dict[float, List[Tuple[float, int]]], total_votes: int) -> Tuple[float, float]:
         """Choose the best BPM from clusters using smart selection."""
         # Handle empty clusters
-        if not clusters:
+        if not clusters or total_votes <= 0:
             return 120.0, 0.0  # Default BPM with zero confidence
 
         # base cluster = largest votes
@@ -75,37 +75,31 @@ class BPMDetector:
         self, y: np.ndarray, sr: int, min_bpm: float = 40.0, max_bpm: float = 300.0, start_bpm: float = 150.0
     ) -> Tuple[float, float, np.ndarray, np.ndarray]:
         """Detect BPM from audio signal with optimized processing."""
-        # Choose API without FutureWarning
-        if (
-            hasattr(librosa, "feature")
-            and hasattr(librosa.feature, "rhythm")
-            and hasattr(librosa.feature.rhythm, "tempo")
-        ):
-            tempo_func = librosa.feature.rhythm.tempo
-        else:
-            warnings.filterwarnings("ignore", category=FutureWarning, message=".*librosa.beat.tempo.*")
-            tempo_func = librosa.beat.tempo
+        y_array = np.asarray(y)
+        if y_array.size == 0 or not np.any(y_array):
+            return 120.0, 0.0, np.array([], dtype=float), np.array([], dtype=int)
 
         # Optimize for speed: use smaller hop_length for faster processing
         optimized_hop = min(self.hop_length, 512)
 
         # Limit audio length for very long files to improve speed
         max_duration = 180  # 3 minutes max for BPM detection
-        if len(y) > max_duration * sr:
+        max_samples = max_duration * sr
+        if len(y_array) > max_samples:
             # Use middle section for better representation
-            start_idx = len(y) // 4
-            end_idx = start_idx + (max_duration * sr)
-            y_trimmed = y[start_idx:end_idx]
+            start_idx = (len(y_array) - max_samples) // 2
+            y_trimmed = y_array[start_idx : start_idx + max_samples]
         else:
-            y_trimmed = y
+            y_trimmed = y_array
 
-        cands = tempo_func(
+        cands = librosa.feature.tempo(
             y=y_trimmed, sr=sr, aggregate=None, hop_length=optimized_hop, max_tempo=max_bpm, start_bpm=start_bpm
         )
 
         bins = np.arange(min_bpm, max_bpm + BIN_WIDTH, BIN_WIDTH)
         hist, edges = np.histogram(cands, bins=bins)
         top_idx = hist.argsort()[::-1][:10]
+        top_idx = top_idx[hist[top_idx] > 0]
         top_bpms = edges[top_idx]
         top_hits = hist[top_idx]
 
@@ -157,6 +151,23 @@ class AudioAnalyzer:
             return features
         return self._feature_cache[cache_key]
 
+    def _load_audio(self, path: str) -> Tuple[np.ndarray, int]:
+        """Load audio as mono float32 at the analyzer's sample rate."""
+        try:
+            y, sr = librosa.load(
+                path,
+                sr=self.sr,
+                mono=True,
+                dtype=np.float32,  # Use float32 for better memory efficiency
+                res_type='kaiser_fast',  # Faster resampling
+            )
+        except Exception as e:
+            # The decoder reports a missing path as its own error type
+            if not os.path.exists(path):
+                raise FileNotFoundError(f"Audio file not found: {path}") from e
+            raise
+        return y, int(sr)
+
     def analyze_file(
         self,
         path: str,
@@ -172,6 +183,7 @@ class AudioAnalyzer:
         analyze_timbre: bool = False,
         analyze_melody: bool = False,
         analyze_dynamics: bool = False,
+        detect_modulation: bool = False,
     ) -> Dict[str, Any]:
         """Analyze audio file comprehensively.
 
@@ -189,21 +201,25 @@ class AudioAnalyzer:
             analyze_timbre: Whether to analyze timbre and instruments
             analyze_melody: Whether to analyze melody and harmony
             analyze_dynamics: Whether to analyze dynamics
+            detect_modulation: Whether to analyze key modulation over time (requires detect_key)
 
         Returns:
             Dictionary containing complete analysis results
         """
-        # Load audio with optimized settings
-        y, sr_loaded = librosa.load(
-            path,
-            sr=self.sr,
-            mono=True,
-            dtype=np.float32,  # Use float32 for better memory efficiency
-            res_type='kaiser_fast',  # Faster resampling
-        )
-        sr = int(sr_loaded)  # Ensure sr is int for type checking
+        if detect_modulation and not detect_key:
+            raise ValueError('detect_modulation requires detect_key=True')
 
-        total_steps = 9 if comprehensive else 3
+        y, sr = self._load_audio(path)
+
+        # Determine which analyses to run before calculating progress steps.
+        run_chords = comprehensive or analyze_chords
+        run_structure = comprehensive or analyze_structure
+        run_rhythm = comprehensive or analyze_rhythm
+        run_timbre = comprehensive or analyze_timbre
+        run_melody = comprehensive or analyze_melody
+        run_dynamics = comprehensive or analyze_dynamics
+        enabled_analyses = (run_chords, run_structure, run_rhythm, run_timbre, run_melody, run_dynamics)
+        total_steps = 2 + sum(enabled_analyses) + int(comprehensive) + int(detect_modulation)
         current_step = 0
 
         def update_progress():
@@ -262,31 +278,30 @@ class AudioAnalyzer:
 
         results = {"basic_info": basic_info}
 
-        # Determine which analyses to run
-        # If comprehensive is True, enable all analyses
-        run_chords = comprehensive or analyze_chords
-        run_structure = comprehensive or analyze_structure
-        run_rhythm = comprehensive or analyze_rhythm
-        run_timbre = comprehensive or analyze_timbre
-        run_melody = comprehensive or analyze_melody
-        run_dynamics = comprehensive or analyze_dynamics
+        if detect_modulation:
+            results['modulation_analysis'] = self.key_detector.compute_modulation_timeseries(y, sr, bpm)
+            update_progress()
 
         # If no specific analyses requested, return basic info
         if not (run_chords or run_structure or run_rhythm or run_timbre or run_melody or run_dynamics):
-            update_progress()
             return results
 
         # Selective or comprehensive analysis
         try:
             # Chord progression analysis
             if run_chords:
-                chord_analysis = self.chord_analyzer.analyze(y, sr, key or "C Major")
+                chord_analysis = self.chord_analyzer.analyze(y, sr, key or "C Major", bpm)
                 results["chord_progression"] = chord_analysis
                 update_progress()
 
             # Structure analysis
             if run_structure:
-                structure_analysis = self.structure_analyzer.analyze(y, sr)
+                structure_analysis = self.structure_analyzer.analyze(y, sr, bpm)
+                if structure_analysis.get('sections'):
+                    structure_analysis = dict(structure_analysis)
+                    structure_analysis['sections'] = self._analyze_section_chord_progressions(
+                        y, sr, structure_analysis['sections'], bpm
+                    )
                 results["structure"] = structure_analysis
                 update_progress()
 
@@ -345,6 +360,34 @@ class AudioAnalyzer:
             gc.collect()
 
         return results
+
+    def _analyze_section_chord_progressions(
+        self, y: np.ndarray, sr: int, sections: List[Dict[str, Any]], bpm: float = 130.0
+    ) -> List[Dict[str, Any]]:
+        """Add deterministic chord progressions to structure sections."""
+        enhanced_sections = []
+
+        for section in sections:
+            start_sample = int(section['start_time'] * sr)
+            end_sample = int(section['end_time'] * sr)
+            segment = y[start_sample:end_sample]
+
+            if len(segment) > sr:
+                try:
+                    chroma = self.chord_analyzer.extract_chroma_features(segment, sr)
+                    segment_chords = self.chord_analyzer.detect_chords(chroma, bpm=bpm, sr=sr)
+                    chord_names = list(dict.fromkeys(str(chord[0]) for chord in segment_chords))[:4]
+                    section_progression = ' → '.join(chord_names) if chord_names else 'Unknown'
+                except Exception:
+                    section_progression = 'Unknown'
+            else:
+                section_progression = 'Unknown'
+
+            enhanced_section = dict(section)
+            enhanced_section['chord_progression'] = section_progression
+            enhanced_sections.append(enhanced_section)
+
+        return enhanced_sections
 
     def _generate_reference_tags(self, results: Dict[str, Any]) -> List[str]:
         """Generate reference tags for the track.

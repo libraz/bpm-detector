@@ -2,7 +2,6 @@
 
 from .auto_parallel import AutoParallelConfig, ParallelConfig, SystemMonitor
 from .chord_analyzer import ChordProgressionAnalyzer
-from .cli import main
 from .dynamics_analyzer import DynamicsAnalyzer
 from .harmony_analyzer import HarmonyAnalyzer
 from .key_detector import KeyDetector as EnhancedKeyDetector
@@ -49,3 +48,10 @@ KeyDetector = EnhancedKeyDetector
 def hello() -> str:
     """Legacy function for compatibility."""
     return "Hello from bpm-detector!"
+
+
+def main() -> None:
+    """Run the command-line interface."""
+    from .cli import main as cli_main
+
+    cli_main()
