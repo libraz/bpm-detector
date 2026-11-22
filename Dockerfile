@@ -10,19 +10,20 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /app
 
-# Install the locked dependencies first for better caching (the lock's editable self-reference is dropped)
-COPY requirements.lock ./
-RUN pip install --no-cache-dir --upgrade pip && \
-    sed '/^-e /d' requirements.lock > /tmp/requirements.txt && \
-    pip install --no-cache-dir -r /tmp/requirements.txt && \
+COPY --from=ghcr.io/astral-sh/uv:0.13.9 /uv /usr/local/bin/uv
+
+# Install the locked runtime dependencies first for better caching
+COPY pyproject.toml uv.lock ./
+RUN uv export --frozen --no-dev --no-emit-project --no-hashes -o /tmp/requirements.txt && \
+    uv pip install --system --no-cache -r /tmp/requirements.txt && \
     rm /tmp/requirements.txt
 
 # Copy source code
 COPY src/ ./src/
-COPY pyproject.toml LICENSE README.md ./
+COPY LICENSE README.md ./
 
 # Install the package against the locked dependencies
-RUN pip install --no-cache-dir --no-deps .
+RUN uv pip install --system --no-cache --no-deps .
 
 # Create non-root user
 RUN useradd --create-home --shell /bin/bash app

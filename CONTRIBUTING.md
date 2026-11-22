@@ -70,14 +70,14 @@ cd bpm-detector
 
 ### 2. Set Up Development Environment
 
-#### Option A: Using rye (Recommended)
+#### Option A: Using uv (Recommended)
 
 ```bash
-# Install dependencies with rye
-rye sync
+# Install dependencies with uv
+uv sync
 
 # Activate the virtual environment
-rye shell
+source .venv/bin/activate
 ```
 
 #### Option B: Using pip
@@ -90,8 +90,8 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 # Install in development mode
 pip install -e .
 
-# Install development dependencies
-pip install pytest pytest-cov black isort flake8 mypy
+# Install development dependencies (pip 25.1+)
+pip install --group dev
 ```
 
 ### 3. Verify Installation
@@ -303,6 +303,13 @@ Brief description of changes
 We follow PEP 8 with some modifications:
 
 ```bash
+# Run every formatter, then flake8 and mypy
+make format
+
+# Check formatting and lint without modifying files (what CI runs)
+make format-check
+
+# Or run each tool directly
 # Format code with black
 black src/ tests/
 

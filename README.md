@@ -146,15 +146,15 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -e .
 ```
 
-### Option 3: Using rye (if you have rye installed)
+### Option 3: Using uv (if you have uv installed)
 
 ```bash
 # Clone the repository
 git clone git@github.com:libraz/bpm-detector.git
 cd bpm-detector
 
-# Install dependencies with rye
-rye sync
+# Install dependencies with uv
+uv sync
 ```
 
 ## Usage
@@ -377,8 +377,8 @@ If you're running from source without installation:
 # Using Python module
 python -m bpm_detector.cli your_audio_file.wav
 
-# Using rye
-rye run python -m bpm_detector.cli your_audio_file.wav
+# Using uv
+uv run python -m bpm_detector.cli your_audio_file.wav
 
 # Build Docker image locally
 docker build -t bpm-detector .
@@ -581,7 +581,7 @@ Comprehensive analysis is implemented as an optional feature for several reasons
 
 ## Dependencies
 
-Requires Python 3.12 or later. Runtime dependencies and their minimum versions are declared in [`pyproject.toml`](pyproject.toml), and the tested set is pinned in `requirements.lock`.
+Requires Python 3.12 or later. Runtime dependencies and their minimum versions are declared in [`pyproject.toml`](pyproject.toml), and the tested set is pinned in `uv.lock`.
 
 ## Contributing
 

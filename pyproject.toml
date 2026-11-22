@@ -6,17 +6,17 @@ authors = [
     { name = "libraz", email = "libraz@libraz.net" }
 ]
 dependencies = [
-    "librosa>=1.0.0",
+    "librosa>=1.0.1",
     "soundfile>=0.14.0",
     "audioread>=3.1.0",
-    "numpy>=2.5.3",
+    "numpy>=2.5.5",
     "tqdm>=4.70.1",
     "colorama>=0.4.6",
     "scikit-learn>=1.9.1",
     "scipy>=1.18.1",
     "matplotlib>=3.11.2",
     "seaborn>=0.13.2",
-    "pandas>=3.0.6",
+    "pandas>=3.1.1",
     "psutil>=7.2.2",
     "resampy>=0.4.3",
 ]
@@ -50,32 +50,18 @@ bpm-detector = "bpm_detector.cli:main"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.rye]
-managed = true
-dev-dependencies = [
-    "pytest>=9.1.1",
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
     "pytest-cov>=7.1.0",
-    "black>=26.5.1",
+    "black>=26.10.1",
     "isort>=9.0.2",
-    "flake8>=7.4.1",
-    "mypy>=2.3.1",
-    "pre-commit>=4.6.2",
+    "flake8>=7.5.0",
+    "mypy>=2.4.1",
+    "pre-commit>=4.7.0",
     "autoflake>=2.4.0",
     "monkeytype>=23.3.0",
 ]
-
-[tool.rye.scripts]
-lint-flake8 = "flake8 src/ tests/"
-lint-mypy = "mypy src/"
-lint = { chain = ["lint-flake8", "lint-mypy"] }
-format-black = "black src/ tests/"
-format-isort = "isort src/ tests/"
-format-autoflake = "autoflake --remove-all-unused-imports --remove-unused-variables --in-place --recursive src/ tests/"
-format = { chain = ["format-autoflake", "format-black", "format-isort"] }
-type-check = "mypy src/"
-test = "pytest tests/"
-check-all = { chain = ["lint", "test"] }
-fix = { chain = ["format", "lint"] }
 
 [tool.hatch.metadata]
 allow-direct-references = true

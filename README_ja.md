@@ -147,15 +147,15 @@ source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -e .
 ```
 
-### 方法3: ryeを使用（ryeがインストールされている場合）
+### 方法3: uvを使用（uvがインストールされている場合）
 
 ```bash
 # リポジトリをクローン
 git clone git@github.com:libraz/bpm-detector.git
 cd bpm-detector
 
-# ryeで依存関係をインストール
-rye sync
+# uvで依存関係をインストール
+uv sync
 ```
 
 ## 使用方法
@@ -378,8 +378,8 @@ docker run --rm ghcr.io/libraz/bpm-detector:latest
 # Pythonモジュールとして実行
 python -m bpm_detector.cli your_audio_file.wav
 
-# ryeを使用
-rye run python -m bpm_detector.cli your_audio_file.wav
+# uvを使用
+uv run python -m bpm_detector.cli your_audio_file.wav
 
 # Dockerイメージをローカルでビルド
 docker build -t bpm-detector .
@@ -583,7 +583,7 @@ librosa の初回 JIT コンパイル時間は含みません。
 
 ## 依存関係
 
-Python 3.12 以上が必要です。実行時の依存とその最小バージョンは [`pyproject.toml`](pyproject.toml) に、検証済みの組み合わせは `requirements.lock` に記載しています。
+Python 3.12 以上が必要です。実行時の依存とその最小バージョンは [`pyproject.toml`](pyproject.toml) に、検証済みの組み合わせは `uv.lock` に記載しています。
 
 ## コントリビューション
 

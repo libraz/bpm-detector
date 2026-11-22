@@ -61,7 +61,6 @@ examples/
 
 # Development files
 .github/
-requirements-dev.lock
 .python-version
 
 # Build artifacts
