@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.2.1] - 2026-11-23
+
+### Changed
+- Development tooling moved to uv: `uv.lock` replaces `requirements.lock` and `requirements-dev.lock`, dev dependencies live in the `dev` dependency group, and `make format` / `format-check` / `lint` / `test` replace the former project scripts
+- Dependency minimums raised to the current releases, including `numpy>=2.5.5` and `pandas>=3.1.1`
+
 ## [1.2.0] - 2026-10-01
 
 ### Added
